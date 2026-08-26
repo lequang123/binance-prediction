@@ -141,6 +141,16 @@ export interface HistoricalResult {
   pnl: number;
 }
 
+/** Grouped historical result by marketTopicId */
+export interface GroupedHistoricalResult {
+  marketTopicId: number;
+  marketTitle: string;
+  up: HistoricalResult | null;
+  down: HistoricalResult | null;
+  totalPnl: number;
+  isWin: boolean;
+}
+
 /** Win/Loss summary statistics */
 export interface WinLossSummary {
   totalRounds: number;
@@ -154,13 +164,20 @@ export interface WinLossSummary {
   avgLoss: number;
   bestTrade: number;
   worstTrade: number;
+  maxWin: number;
+  maxLoss: number;
 }
 
-/** API response wrapper for frontend */
 export interface DashboardData {
   active: MarketSnapshot | null;
   trades: DetectedTrade[];
-  history: HistoricalResult[];
-  winLossSummary: WinLossSummary;
   timestamp: number;
+}
+
+export interface PaginatedHistoryResponse {
+  results: GroupedHistoricalResult[];
+  summary: WinLossSummary;
+  total: number;
+  page: number;
+  pageSize: number;
 }

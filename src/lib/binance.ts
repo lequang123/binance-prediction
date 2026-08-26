@@ -31,10 +31,10 @@ const HEADERS: Record<string, string> = {
  * @param pageSize - entries per page
  */
 export async function fetchPositions(
-  type: 'open' | 'closed' = 'open',
+  type: 'open' | 'closed',
   page: number = 1,
   pageSize: number = 20
-): Promise<BinancePosition[]> {
+): Promise<{ entries: BinancePosition[]; total: number }> {
   const body = {
     walletAddress: WALLET_ADDRESS,
     type,
@@ -62,14 +62,17 @@ export async function fetchPositions(
     throw new Error(`Binance API returned error: ${data.message || 'Unknown error'}`);
   }
 
-  return data.data.entries;
+  return {
+    entries: data.data.entries,
+    total: data.data.total,
+  };
 }
 
 /**
  * Fetch active BTC Up/Down 5m positions (marketStatus == 1)
  */
 export async function fetchActivePositions(): Promise<BinancePosition[]> {
-  const entries = await fetchPositions('open', 1, 20);
+  const { entries } = await fetchPositions('open', 1, 20);
   return entries.filter(
     (e) => e.eventSlug === EVENT_SLUG && e.marketStatus === 1
   );
@@ -80,10 +83,66 @@ export async function fetchActivePositions(): Promise<BinancePosition[]> {
  */
 export async function fetchClosedPositions(
   page: number = 1,
-  pageSize: number = 50
-): Promise<BinancePosition[]> {
-  const entries = await fetchPositions('closed', page, pageSize);
-  return entries.filter((e) => e.eventSlug === EVENT_SLUG);
+  pageSize: number = 20
+): Promise<{ entries: BinancePosition[]; total: number }> {
+  const BINANCE_MAX_PAGE_SIZE = 20;
+
+  if (pageSize <= BINANCE_MAX_PAGE_SIZE) {
+    const { entries, total } = await fetchPositions('closed', page, pageSize);
+    const filtered = entries.filter((e) => e.eventSlug === EVENT_SLUG);
+    return { entries: filtered, total };
+  }
+
+  // Handle larger page sizes by fetching multiple Binance pages
+  const startBinancePage = (page - 1) * Math.ceil(pageSize / BINANCE_MAX_PAGE_SIZE) + 1;
+  const endBinancePage = page * Math.ceil(pageSize / BINANCE_MAX_PAGE_SIZE);
+
+  let allEntries: BinancePosition[] = [];
+  let totalItems = 0;
+
+  for (let p = startBinancePage; p <= endBinancePage; p++) {
+    const { entries, total } = await fetchPositions('closed', p, BINANCE_MAX_PAGE_SIZE);
+    allEntries = allEntries.concat(entries);
+    totalItems = total;
+    if (entries.length < BINANCE_MAX_PAGE_SIZE) {
+      break;
+    }
+  }
+
+  const filtered = allEntries.filter((e) => e.eventSlug === EVENT_SLUG);
+  return { entries: filtered, total: totalItems };
+}
+
+/**
+ * Fetch ALL closed BTC Up/Down 5m positions
+ * Used for calculating overall Win/Loss Summary accurately across all history.
+ */
+export async function fetchAllClosedPositions(): Promise<BinancePosition[]> {
+  const BINANCE_MAX_PAGE_SIZE = 20;
+
+  // First request to get total
+  const { entries: firstPage, total } = await fetchPositions('closed', 1, BINANCE_MAX_PAGE_SIZE);
+  let allEntries = [...firstPage];
+
+  const totalPages = Math.ceil(total / BINANCE_MAX_PAGE_SIZE);
+  // Cap at 250 pages (5000 items) to prevent timeouts but get enough data
+  const maxPages = Math.min(totalPages, 250);
+
+  // Fetch in batches of 20 to speed up
+  for (let i = 2; i <= maxPages; i += 20) {
+    const batch = [];
+    for (let j = i; j < i + 20 && j <= maxPages; j++) {
+      batch.push(fetchPositions('closed', j, BINANCE_MAX_PAGE_SIZE).catch(() => null));
+    }
+    const results = await Promise.all(batch);
+    for (const res of results) {
+      if (res && res.entries) {
+        allEntries = allEntries.concat(res.entries);
+      }
+    }
+  }
+
+  return allEntries.filter((e) => e.eventSlug === EVENT_SLUG);
 }
 
 export { WALLET_ADDRESS, EVENT_SLUG };
