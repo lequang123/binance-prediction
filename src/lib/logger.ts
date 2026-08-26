@@ -6,7 +6,10 @@ import fs from 'fs';
 import path from 'path';
 import type { DetectedTrade, MarketSnapshot, CompactSnapshot } from './types';
 
-const LOGS_DIR = path.join(process.cwd(), 'logs');
+// Use /tmp/logs on Vercel (read-only filesystem workaround), otherwise local logs dir
+const LOGS_DIR = process.env.VERCEL 
+  ? path.join('/tmp', 'logs') 
+  : path.join(process.cwd(), 'logs');
 
 /**
  * Ensure logs directory exists.
@@ -29,10 +32,14 @@ function getDateString(): string {
  * Append a JSON line to a file.
  */
 function appendJsonl(filename: string, data: unknown): void {
+  // Logging to file disabled as requested
+  return;
+  /*
   ensureLogsDir();
   const filepath = path.join(LOGS_DIR, filename);
   const line = JSON.stringify(data) + '\n';
   fs.appendFileSync(filepath, line, 'utf-8');
+  */
 }
 
 /**
