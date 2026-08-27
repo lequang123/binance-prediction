@@ -55,10 +55,10 @@ export default function TradeTimeline({ trades }: TradeTimelineProps) {
         <div className="timeline">
           {sortedTrades.map((trade, i) => {
             const isNew = i === 0;
-            const upValue = trade.cumUp?.value ?? 0;
-            const downValue = trade.cumDown?.value ?? 0;
-            const total = upValue + downValue;
-            const upPct = total > 0 ? (upValue / total) * 100 : 50;
+            const upCost = trade.cumUp?.costBasis ?? 0;
+            const downCost = trade.cumDown?.costBasis ?? 0;
+            const totalCost = upCost + downCost;
+            const upPct = totalCost > 0 ? (upCost / totalCost) * 100 : 50;
             const downPct = 100 - upPct;
 
             const actionClass =
@@ -99,7 +99,7 @@ export default function TradeTimeline({ trades }: TradeTimelineProps) {
                 {/* Trade details */}
                 <div className="trade-details">
                   <span>
-                    Amount: <span className="value">{formatUsd(trade.amountChange)}</span>
+                    Cost: <span className="value">{formatUsd(trade.amountChange)}</span>
                   </span>
                   <span>
                     Fill: <span className="value">{trade.fillPrice.toFixed(4)}</span>
@@ -115,8 +115,16 @@ export default function TradeTimeline({ trades }: TradeTimelineProps) {
                     </span>
                   </span>
                   <span>
-                    Shares: <span className="value">+{trade.sharesChange.toFixed(2)}</span>
+                    Shares: <span className="value">{trade.action === 'SELL' ? '-' : '+'}{trade.sharesChange.toFixed(2)}</span>
                   </span>
+                  {trade.action === 'BUY' && trade.potentialWin > 0 && (
+                    <span>
+                      If Win:{' '}
+                      <span className="value" style={{ color: 'var(--up)', fontWeight: 700 }}>
+                        +{formatUsd(trade.potentialWin)}
+                      </span>
+                    </span>
+                  )}
                 </div>
 
                 {/* Hedge bar */}
@@ -126,13 +134,13 @@ export default function TradeTimeline({ trades }: TradeTimelineProps) {
                       className="up-fill"
                       style={{ width: `${upPct}%` }}
                     >
-                      {upPct > 20 && `UP ${formatUsd(upValue)} (${upPct.toFixed(0)}%)`}
+                      {upPct > 20 && `UP ${formatUsd(upCost)} (${upPct.toFixed(0)}%)`}
                     </div>
                     <div
                       className="down-fill"
                       style={{ width: `${downPct}%` }}
                     >
-                      {downPct > 20 && `DOWN ${formatUsd(downValue)} (${downPct.toFixed(0)}%)`}
+                      {downPct > 20 && `DOWN ${formatUsd(downCost)} (${downPct.toFixed(0)}%)`}
                     </div>
                   </div>
                 </div>

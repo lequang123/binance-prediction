@@ -54,8 +54,10 @@ export function normalizeToSnapshot(
 
   const upValue = up?.value ?? 0;
   const downValue = down?.value ?? 0;
-  const totalInvested = upValue + downValue;
-  const hedgeRatio = totalInvested > 0 ? upValue / totalInvested : 0.5;
+  const upCost = up ? up.shares * up.avgPrice : 0;
+  const downCost = down ? down.shares * down.avgPrice : 0;
+  const totalInvested = upCost + downCost;
+  const hedgeRatio = totalInvested > 0 ? upCost / totalInvested : 0.5;
 
   return {
     timestamp: ts,
@@ -194,18 +196,22 @@ export function diffSnapshots(
     if (!curSide) continue;
 
     const prevShares = prevSide?.shares ?? 0;
-    const prevValue = prevSide?.value ?? 0;
+    const prevAvgPrice = prevSide?.avgPrice ?? 0;
     const sharesChange = curSide.shares - prevShares;
-    const valueChange = curSide.value - prevValue;
 
     // Threshold: ignore tiny floating point differences
     if (Math.abs(sharesChange) < 0.01) continue;
 
+    // Cost basis diff: actual money spent/received
+    const prevCost = prevShares * prevAvgPrice;
+    const curCost = curSide.shares * curSide.avgPrice;
+    const costChange = curCost - prevCost;
+
     const action: 'BUY' | 'SELL' = sharesChange > 0 ? 'BUY' : 'SELL';
     const absSharesChange = Math.abs(sharesChange);
-    const absValueChange = Math.abs(valueChange);
+    const absCostChange = Math.abs(costChange);
     const fillPrice =
-      absSharesChange > 0 ? absValueChange / absSharesChange : 0;
+      absSharesChange > 0 ? absCostChange / absSharesChange : 0;
 
     const { tag, note } = detectStrategy(
       side,
@@ -216,6 +222,14 @@ export function diffSnapshots(
       prevHedgeRatio
     );
 
+    // Potential win if this side wins: each share pays $1
+    const potentialWin = action === 'BUY'
+      ? absSharesChange - absCostChange  // profit = payout - cost
+      : 0;
+
+    const upCostBasis = current.up ? current.up.shares * current.up.avgPrice : 0;
+    const downCostBasis = current.down ? current.down.shares * current.down.avgPrice : 0;
+
     const trade: DetectedTrade = {
       timestamp: current.timestamp,
       marketId: current.marketId,
@@ -223,19 +237,21 @@ export function diffSnapshots(
       side,
       action,
       sharesChange: absSharesChange,
-      amountChange: absValueChange,
+      amountChange: absCostChange,
       fillPrice,
       marketOddsUp: current.up?.currentPrice ?? 0,
       marketOddsDown: current.down?.currentPrice ?? 0,
       payoutMultiplier: fillPrice > 0 ? 1 / fillPrice : 0,
+      potentialWin,
       cumUp: current.up
-        ? { shares: current.up.shares, value: current.up.value, pnl: current.up.pnl }
+        ? { shares: current.up.shares, value: current.up.value, pnl: current.up.pnl, costBasis: upCostBasis }
         : null,
       cumDown: current.down
         ? {
             shares: current.down.shares,
             value: current.down.value,
             pnl: current.down.pnl,
+            costBasis: downCostBasis,
           }
         : null,
       hedgeRatio: current.hedgeRatio,

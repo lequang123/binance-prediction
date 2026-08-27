@@ -43,9 +43,11 @@ export default function ActivePositions({ snapshot }: ActivePositionsProps) {
 
   return (
     <div className="glass-card full-width">
-      <div className="card-title">
-        <Target size={14} />
-        Active Positions — {snapshot.marketTitle}
+      <div className="card-title" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Target size={14} />
+          <span>Active Positions — {snapshot.marketTitle}</span>
+        </div>
       </div>
 
       <div className="positions-grid">
@@ -58,6 +60,10 @@ export default function ActivePositions({ snapshot }: ActivePositionsProps) {
           <div className="position-stats">
             <div className="stat-row">
               <span className="stat-label">Invested</span>
+              <span className="stat-value">{up ? formatUsd(up.shares * up.avgPrice) : '--'}</span>
+            </div>
+            <div className="stat-row">
+              <span className="stat-label">Current Value</span>
               <span className="stat-value">{up ? formatUsd(up.value) : '--'}</span>
             </div>
             <div className="stat-row">
@@ -106,6 +112,10 @@ export default function ActivePositions({ snapshot }: ActivePositionsProps) {
           <div className="position-stats">
             <div className="stat-row">
               <span className="stat-label">Invested</span>
+              <span className="stat-value">{down ? formatUsd(down.shares * down.avgPrice) : '--'}</span>
+            </div>
+            <div className="stat-row">
+              <span className="stat-label">Current Value</span>
               <span className="stat-value">{down ? formatUsd(down.value) : '--'}</span>
             </div>
             <div className="stat-row">

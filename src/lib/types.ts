@@ -97,14 +97,15 @@ export interface DetectedTrade {
   side: 'Up' | 'Down';
   action: 'BUY' | 'SELL';
   sharesChange: number;
-  amountChange: number;
+  amountChange: number; // cost basis change (shares × avgPrice diff)
   fillPrice: number; // amountChange / sharesChange
   marketOddsUp: number;
   marketOddsDown: number;
   payoutMultiplier: number; // 1 / fillPrice
+  potentialWin: number; // profit if this side wins = sharesChange - amountChange
   // Cumulative state after this trade
-  cumUp: { shares: number; value: number; pnl: number } | null;
-  cumDown: { shares: number; value: number; pnl: number } | null;
+  cumUp: { shares: number; value: number; pnl: number; costBasis: number } | null;
+  cumDown: { shares: number; value: number; pnl: number; costBasis: number } | null;
   hedgeRatio: number;
   totalInvested: number;
   netPnl: number;

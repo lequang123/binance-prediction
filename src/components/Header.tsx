@@ -1,7 +1,8 @@
 'use client';
 
-import { Activity, Wallet, Clock } from 'lucide-react';
+import { Activity, Wallet, Clock, Edit2, Check, X } from 'lucide-react';
 import type { MarketSnapshot } from '@/lib/types';
+import { useState, useEffect, useRef } from 'react';
 
 interface HeaderProps {
   snapshot: MarketSnapshot | null;
@@ -9,10 +10,62 @@ interface HeaderProps {
   lastUpdate: number;
 }
 
-const WALLET = '0x6da6cb464f92ae7ad4ec3d239c81719cb1d0ae03';
-
 export default function Header({ snapshot, isLive, lastUpdate }: HeaderProps) {
-  const truncatedWallet = `${WALLET.slice(0, 6)}...${WALLET.slice(-4)}`;
+  const [wallet, setWallet] = useState<string>('Loading...');
+  const [isEditing, setIsEditing] = useState(false);
+  const [inputValue, setInputValue] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch initial wallet from API
+  useEffect(() => {
+    fetch('/api/wallet')
+      .then(res => res.json())
+      .then(data => {
+        if (data.address) {
+          setWallet(data.address);
+          setInputValue(data.address);
+        }
+      })
+      .catch(err => console.error('Failed to fetch wallet:', err));
+  }, []);
+
+  const handleEditClick = () => {
+    setIsEditing(true);
+    setInputValue(wallet);
+    setTimeout(() => inputRef.current?.focus(), 50);
+  };
+
+  const handleCancel = () => {
+    setIsEditing(false);
+    setInputValue(wallet);
+  };
+
+  const handleSave = async () => {
+    const trimmed = inputValue.trim();
+    if (!trimmed || trimmed === wallet) {
+      handleCancel();
+      return;
+    }
+    
+    try {
+      const res = await fetch('/api/wallet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address: trimmed }),
+      });
+      if (res.ok) {
+        setWallet(trimmed);
+        setIsEditing(false);
+      } else {
+        alert('Failed to update wallet');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error updating wallet');
+    }
+  };
+
+  const truncatedWallet = wallet.length > 20 ? `${wallet.slice(0, 6)}...${wallet.slice(-4)}` : wallet;
 
   // Parse market title for countdown info
   const marketTitle = snapshot?.marketTitle ?? 'Waiting for data...';
@@ -33,10 +86,47 @@ export default function Header({ snapshot, isLive, lastUpdate }: HeaderProps) {
           <Activity size={20} />
           BTC Prediction Tracker
         </div>
-        <span className="header-wallet">
-          <Wallet size={12} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
-          {truncatedWallet}
-        </span>
+        
+        {isEditing ? (
+          <div className="header-wallet-edit" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <input
+              ref={inputRef}
+              type="text"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSave();
+                if (e.key === 'Escape') handleCancel();
+              }}
+              style={{
+                background: 'rgba(255, 255, 255, 0.1)',
+                border: '1px solid var(--accent)',
+                color: 'white',
+                padding: '4px 8px',
+                borderRadius: 4,
+                fontSize: '0.8rem',
+                width: '300px'
+              }}
+            />
+            <button onClick={handleSave} style={{ background: 'none', border: 'none', color: 'var(--up)', cursor: 'pointer', padding: 4 }}>
+              <Check size={14} />
+            </button>
+            <button onClick={handleCancel} style={{ background: 'none', border: 'none', color: 'var(--down)', cursor: 'pointer', padding: 4 }}>
+              <X size={14} />
+            </button>
+          </div>
+        ) : (
+          <span 
+            className="header-wallet" 
+            onClick={handleEditClick}
+            title="Click to change wallet"
+            style={{ cursor: 'pointer' }}
+          >
+            <Wallet size={12} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
+            {truncatedWallet}
+            <Edit2 size={10} style={{ marginLeft: 6, opacity: 0.5 }} />
+          </span>
+        )}
       </div>
       <div className="header-right">
         <div className="market-info">

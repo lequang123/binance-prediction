@@ -59,11 +59,13 @@ export function logTrade(trade: DetectedTrade): void {
     marketOddsUp: trade.marketOddsUp,
     marketOddsDown: trade.marketOddsDown,
     payoutMultiplier: round(trade.payoutMultiplier),
+    potentialWin: round(trade.potentialWin),
     cumUp: trade.cumUp
       ? {
           shares: round(trade.cumUp.shares),
           value: round(trade.cumUp.value),
           pnl: round(trade.cumUp.pnl),
+          costBasis: round(trade.cumUp.costBasis),
         }
       : null,
     cumDown: trade.cumDown
@@ -71,6 +73,7 @@ export function logTrade(trade: DetectedTrade): void {
           shares: round(trade.cumDown.shares),
           value: round(trade.cumDown.value),
           pnl: round(trade.cumDown.pnl),
+          costBasis: round(trade.cumDown.costBasis),
         }
       : null,
     hedgeRatio: round(trade.hedgeRatio, 4),
