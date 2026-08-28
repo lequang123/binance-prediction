@@ -18,9 +18,9 @@ export default function Dashboard() {
     '/api/positions',
     fetcher,
     {
-      refreshInterval: 2000, // Poll every 2 seconds
+      refreshInterval: 500, // Poll every 500ms
       revalidateOnFocus: true,
-      dedupingInterval: 1000,
+      dedupingInterval: 250,
     }
   );
 

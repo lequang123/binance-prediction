@@ -8,7 +8,7 @@ import { normalizeToSnapshot, diffSnapshots, getAllTrades } from './diff-engine'
 import { logTrade, logSnapshot } from './logger';
 import type { DashboardData, MarketSnapshot, DetectedTrade } from './types';
 
-const POLL_INTERVAL_MS = 200;
+const POLL_INTERVAL_MS = 500;
 
 /** Cached state */
 let cachedSnapshot: MarketSnapshot | null = null;

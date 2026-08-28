@@ -32,14 +32,10 @@ function getDateString(): string {
  * Append a JSON line to a file.
  */
 function appendJsonl(filename: string, data: unknown): void {
-  // Logging to file disabled as requested
-  return;
-  /*
   ensureLogsDir();
   const filepath = path.join(LOGS_DIR, filename);
   const line = JSON.stringify(data) + '\n';
   fs.appendFileSync(filepath, line, 'utf-8');
-  */
 }
 
 /**

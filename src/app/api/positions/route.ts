@@ -12,6 +12,9 @@ import type { DashboardData } from '@/lib/types';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+// Cache the last log time outside the request handler
+let lastSnapshotLogTime = 0;
+
 export async function GET() {
   try {
     // Fetch active positions
@@ -26,8 +29,11 @@ export async function GET() {
     if (snapshot) {
       newTrades = diffSnapshots(snapshot);
 
-      // Log snapshot
-      logSnapshot(snapshot);
+      // Avoid garbage logging: only log snapshot if there's a trade or 5 seconds have passed
+      if (newTrades.length > 0 || timestamp - lastSnapshotLogTime >= 5) {
+        logSnapshot(snapshot);
+        lastSnapshotLogTime = timestamp;
+      }
 
       // Log any new trades
       for (const trade of newTrades) {
