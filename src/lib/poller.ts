@@ -6,6 +6,7 @@
 import { fetchActivePositions } from './binance';
 import { normalizeToSnapshot, diffSnapshots, getAllTrades } from './diff-engine';
 import { logTrade, logSnapshot } from './logger';
+
 import type { DashboardData, MarketSnapshot, DetectedTrade } from './types';
 
 const POLL_INTERVAL_MS = 500;

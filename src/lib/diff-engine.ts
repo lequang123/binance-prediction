@@ -35,6 +35,7 @@ export function normalizeToSnapshot(
   for (const pos of positions) {
     const side: SidePosition = {
       side: pos.outcomeName as 'Up' | 'Down',
+      tokenId: pos.tokenId,
       shares: pos.shares,
       value: pos.value,
       avgPrice: pos.avgPrice,
@@ -235,6 +236,7 @@ export function diffSnapshots(
       marketId: current.marketId,
       marketTitle: current.marketTitle,
       side,
+      tokenId: curSide.tokenId,
       action,
       sharesChange: absSharesChange,
       amountChange: absCostChange,

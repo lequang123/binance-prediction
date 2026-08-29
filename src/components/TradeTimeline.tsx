@@ -127,6 +127,7 @@ export default function TradeTimeline({ trades }: TradeTimelineProps) {
                   )}
                 </div>
 
+
                 {/* Hedge bar */}
                 <div className="hedge-bar-container">
                   <div className="hedge-bar">

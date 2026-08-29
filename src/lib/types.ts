@@ -54,6 +54,7 @@ export interface BinanceApiResponse {
 /** Normalized position for a single side (Up or Down) */
 export interface SidePosition {
   side: 'Up' | 'Down';
+  tokenId: string; // Token ID dùng để đặt lệnh
   shares: number;
   value: number;
   avgPrice: number;
@@ -95,6 +96,7 @@ export interface DetectedTrade {
   marketId: number;
   marketTitle: string;
   side: 'Up' | 'Down';
+  tokenId: string; // Token ID tương ứng với side này
   action: 'BUY' | 'SELL';
   sharesChange: number;
   amountChange: number; // cost basis change (shares × avgPrice diff)

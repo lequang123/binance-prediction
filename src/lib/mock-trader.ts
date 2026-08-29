@@ -1,4 +1,5 @@
 import type { DetectedTrade } from './types';
+import { executeLiveTrade } from './trade-api';
 
 export interface MockPosition {
   marketId: number;
@@ -40,10 +41,11 @@ export class MockTrader {
     if (trade.action !== 'BUY') return;
 
     // 2. Scale down the cost: Cost / 10
-    const mockCost = trade.amountChange / 20;
+    const mockCost = trade.amountChange / 10;
 
-    // Ignore tiny trades to prevent spam
-    if (mockCost < 1) return;
+    // Tạm thời bỏ filter (chặn spam) này đi để bạn copy được TOÀN BỘ lệnh của Trader
+    // Dù trader đánh lệnh bé xíu thì mình vẫn nã đúng 1$ theo logic ở dưới.
+    // if (mockCost < 1) return;
 
     // 3. Calculate simulated shares based on fillPrice
     const mockShares = mockCost / trade.fillPrice;
@@ -85,6 +87,18 @@ export class MockTrader {
     this.tradeHistory.push(mockRecord);
 
     console.log(`[MOCK TRADE] Copied! Spent $${mockCost.toFixed(2)} on ${trade.side} @ ${trade.fillPrice.toFixed(4)} | Market: ${trade.marketId} | Bal: $${this.balance.toFixed(2)}`);
+
+    // 7. GỌI API TRADE THẬT TRÊN BINANCE
+    if (trade.tokenId) {
+      // Đầu tư đúng 1$ cho mỗi lệnh bắn ra (1 USDT = 10^18 WEI)
+      const AMOUNT_IN = '1000000000000000000';
+      console.log(`[TRIGGER LIVE TRADE] Chuẩn bị gọi Binance API cho TokenID: ${trade.tokenId}`);
+
+      // Chạy bất đồng bộ, không block luồng xử lý
+      executeLiveTrade(trade.tokenId, 'BUY', AMOUNT_IN, trade.fillPrice).catch(err => {
+        console.error(`[LIVE TRADE ERROR] Cảnh báo, lệnh thật bị lỗi:`, err.message || err);
+      });
+    }
   }
 
   // Settle the market when result is known

@@ -104,7 +104,7 @@ export default function WinLossHistory({ results, summary, page, totalPages, onP
                   <td>
                     {r.up ? (
                       <div>
-                        <span style={{ color: 'var(--up)', fontSize: '0.8rem', marginRight: 8 }}><TrendingUp size={10} style={{display:'inline'}}/> {r.up.avgPrice.toFixed(4)} ({r.up.shares.toFixed(0)})</span>
+                        <span style={{ color: 'var(--up)', fontSize: '0.8rem', marginRight: 8 }}><TrendingUp size={10} style={{display:'inline'}}/> {(r.up.avgPrice || 0).toFixed(4)} ({(r.up.shares || 0).toFixed(0)})</span>
                         <br/>
                         <span style={{ color: r.up.pnl >= 0 ? 'var(--up)' : 'var(--down)', fontWeight: r.up.pnl >= 0 ? 600 : 400 }}>
                           {formatUsd(r.up.pnl)}
@@ -117,7 +117,7 @@ export default function WinLossHistory({ results, summary, page, totalPages, onP
                   <td>
                     {r.down ? (
                       <div>
-                        <span style={{ color: 'var(--down)', fontSize: '0.8rem', marginRight: 8 }}><TrendingDown size={10} style={{display:'inline'}}/> {r.down.avgPrice.toFixed(4)} ({r.down.shares.toFixed(0)})</span>
+                        <span style={{ color: 'var(--down)', fontSize: '0.8rem', marginRight: 8 }}><TrendingDown size={10} style={{display:'inline'}}/> {(r.down.avgPrice || 0).toFixed(4)} ({(r.down.shares || 0).toFixed(0)})</span>
                         <br/>
                         <span style={{ color: r.down.pnl >= 0 ? 'var(--up)' : 'var(--down)', fontWeight: r.down.pnl >= 0 ? 600 : 400 }}>
                           {formatUsd(r.down.pnl)}

@@ -32,6 +32,8 @@ function getDateString(): string {
  * Append a JSON line to a file.
  */
 function appendJsonl(filename: string, data: unknown): void {
+  return; // Đã tắt ghi file log theo yêu cầu
+  
   ensureLogsDir();
   const filepath = path.join(LOGS_DIR, filename);
   const line = JSON.stringify(data) + '\n';

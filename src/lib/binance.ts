@@ -7,7 +7,7 @@ import type { BinanceApiResponse, BinancePosition } from './types';
 const BINANCE_API_URL =
   'https://www.binance.com/bapi/defi/v1/public/wallet-direct/prediction/pf/address/positions';
 
-export let WALLET_ADDRESS = '0x5e498154448608c826e005c93533b827cbb6377e';
+export let WALLET_ADDRESS = '0xcfe7fd7471263f0f374bb83852fb4c351ba7b394';
 const EVENT_SLUG = 'btc-up-or-down-5m';
 
 export function setWalletAddress(address: string) {
