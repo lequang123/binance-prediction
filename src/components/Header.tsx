@@ -8,11 +8,11 @@ interface HeaderProps {
   snapshot: MarketSnapshot | null;
   isLive: boolean;
   lastUpdate: number;
-  realTrade: boolean;
-  onToggleRealTrade: (val: boolean) => void;
+  realTrade?: boolean;
+  onToggleRealTrade?: (val: boolean) => void;
 }
 
-export default function Header({ snapshot, isLive, lastUpdate, realTrade, onToggleRealTrade }: HeaderProps) {
+export default function Header({ snapshot, isLive, lastUpdate, realTrade = false, onToggleRealTrade }: HeaderProps) {
   const [wallet, setWallet] = useState<string>('Loading...');
   const [isEditing, setIsEditing] = useState(false);
   const [inputValue, setInputValue] = useState('');
@@ -32,7 +32,9 @@ export default function Header({ snapshot, isLive, lastUpdate, realTrade, onTogg
   }, []);
 
   const toggleRealTrade = () => {
-    onToggleRealTrade(!realTrade);
+    if (onToggleRealTrade) {
+      onToggleRealTrade(!realTrade);
+    }
   };
 
   const handleEditClick = () => {
