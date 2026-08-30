@@ -11,8 +11,11 @@ console.log("  3. Tự động BÁN toàn bộ để test");
 console.log("Nhấn Ctrl+C để dừng.");
 console.log("==========================================\n");
 
-// Khởi động poller (y hệt như khi Next.js khởi động)
-startPoller();
+// Lấy cờ từ command line
+const enableRealTrade = process.argv.includes('--real-trade');
+
+// Khởi động poller (truyền cờ vào)
+startPoller({ enableRealTrade });
 
 // Giữ cho process Node.js không bị tắt
 setInterval(() => {}, 1000 * 60 * 60);

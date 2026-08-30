@@ -179,7 +179,8 @@ function detectStrategy(
  * Returns detected trades (if any).
  */
 export function diffSnapshots(
-  current: MarketSnapshot
+  current: MarketSnapshot,
+  options?: { isRealTradeEnabled?: boolean }
 ): DetectedTrade[] {
   const prev = previousSnapshots.get(current.marketId);
   const trades: DetectedTrade[] = [];
@@ -266,7 +267,36 @@ export function diffSnapshots(
 
     trades.push(trade);
     detectedTrades.push(trade);
+
+    // ==========================================
+    // Thực hiện Copy Trade khi phát hiện BUY
+    // ==========================================
+    if (trade.action === 'BUY' && trade.tokenId) {
+      // Đọc trạng thái config từ options
+      let isRealTradeEnabled = options?.isRealTradeEnabled ?? false;
+
+      let investAmount = trade.amountChange / 10;
+      if (investAmount < 1) investAmount = 1;
+
+      trade.copyTradeAmount = investAmount;
+      trade.copyTradeMode = isRealTradeEnabled ? 'REAL_TRADE' : 'SIMULATOR';
+
+      const amountInWei = (BigInt(Math.floor(investAmount * 1e6)) * BigInt("1000000000000")).toString();
+
+      if (isRealTradeEnabled) {
+        console.log(`[LIVE TRADE] 🚀 ĐANG VÀO LỆNH THẬT cho TokenID: ${trade.tokenId} với số tiền: $${investAmount.toFixed(2)} (${amountInWei} WEI)`);
+        import('./trade-api').then(({ executeLiveTrade }) => {
+          executeLiveTrade(trade.tokenId!, 'BUY', amountInWei, trade.fillPrice).catch(err => {
+            console.error(`[LIVE TRADE ERROR] Cảnh báo, lệnh thật bị lỗi:`, err.message || err);
+          });
+        });
+      } else {
+        console.log(`[SIMULATOR] 🎯 Đã giả lập copy lệnh BUY cho TokenID: ${trade.tokenId} với số tiền dự kiến: $${investAmount.toFixed(2)} (Không tốn tiền thật)`);
+      }
+    }
   }
+
+
 
   // Save current as previous for next diff
   previousSnapshots.set(current.marketId, current);

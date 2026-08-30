@@ -8,9 +8,11 @@ interface HeaderProps {
   snapshot: MarketSnapshot | null;
   isLive: boolean;
   lastUpdate: number;
+  realTrade: boolean;
+  onToggleRealTrade: (val: boolean) => void;
 }
 
-export default function Header({ snapshot, isLive, lastUpdate }: HeaderProps) {
+export default function Header({ snapshot, isLive, lastUpdate, realTrade, onToggleRealTrade }: HeaderProps) {
   const [wallet, setWallet] = useState<string>('Loading...');
   const [isEditing, setIsEditing] = useState(false);
   const [inputValue, setInputValue] = useState('');
@@ -29,6 +31,10 @@ export default function Header({ snapshot, isLive, lastUpdate }: HeaderProps) {
       .catch(err => console.error('Failed to fetch wallet:', err));
   }, []);
 
+  const toggleRealTrade = () => {
+    onToggleRealTrade(!realTrade);
+  };
+
   const handleEditClick = () => {
     setIsEditing(true);
     setInputValue(wallet);
@@ -46,7 +52,7 @@ export default function Header({ snapshot, isLive, lastUpdate }: HeaderProps) {
       handleCancel();
       return;
     }
-    
+
     try {
       const res = await fetch('/api/wallet', {
         method: 'POST',
@@ -72,11 +78,11 @@ export default function Header({ snapshot, isLive, lastUpdate }: HeaderProps) {
 
   const lastUpdateStr = lastUpdate
     ? new Date(lastUpdate * 1000).toLocaleTimeString('en-US', {
-        hour12: false,
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-      })
+      hour12: false,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    })
     : '--:--:--';
 
   return (
@@ -86,7 +92,7 @@ export default function Header({ snapshot, isLive, lastUpdate }: HeaderProps) {
           <Activity size={20} />
           BTC Prediction Tracker
         </div>
-        
+
         {isEditing ? (
           <div className="header-wallet-edit" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <input
@@ -116,8 +122,8 @@ export default function Header({ snapshot, isLive, lastUpdate }: HeaderProps) {
             </button>
           </div>
         ) : (
-          <span 
-            className="header-wallet" 
+          <span
+            className="header-wallet"
             onClick={handleEditClick}
             title="Click to change wallet"
             style={{ cursor: 'pointer' }}
@@ -136,9 +142,48 @@ export default function Header({ snapshot, isLive, lastUpdate }: HeaderProps) {
             Last update: {lastUpdateStr}
           </div>
         </div>
-        <div className="live-indicator">
-          <span className="live-dot" style={{ background: isLive ? 'var(--up)' : 'var(--down)' }} />
-          {isLive ? 'LIVE' : 'OFFLINE'}
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {/* Toggle Real Trade / Simulator */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              background: 'rgba(255,255,255,0.05)',
+              padding: '6px 12px',
+              borderRadius: 20,
+              border: `1px solid ${realTrade ? 'var(--up)' : 'rgba(255,255,255,0.2)'}`
+            }}
+          >
+            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: realTrade ? 'var(--up)' : 'var(--text-muted)' }}>
+              {realTrade ? 'REAL TRADE' : 'SIMULATOR'}
+            </span>
+            <label className="switch" style={{ position: 'relative', display: 'inline-block', width: 34, height: 20 }}>
+              <input
+                type="checkbox"
+                checked={realTrade}
+                onChange={toggleRealTrade}
+                style={{ opacity: 0, width: 0, height: 0 }}
+              />
+              <span style={{
+                position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0,
+                backgroundColor: realTrade ? 'var(--up)' : '#ccc',
+                transition: '.4s', borderRadius: 34
+              }}>
+                <span style={{
+                  position: 'absolute', content: '""', height: 14, width: 14, left: 3, bottom: 3,
+                  backgroundColor: 'white', transition: '.4s', borderRadius: '50%',
+                  transform: realTrade ? 'translateX(14px)' : 'translateX(0)'
+                }} />
+              </span>
+            </label>
+          </div>
+
+          <div className="live-indicator">
+            <span className="live-dot" style={{ background: isLive ? 'var(--up)' : 'var(--down)' }} />
+            {isLive ? 'LIVE' : 'OFFLINE'}
+          </div>
         </div>
       </div>
     </header>

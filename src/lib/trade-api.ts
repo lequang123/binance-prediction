@@ -87,11 +87,6 @@ async function placePredictionOrder(walletAddress: string, walletId: string, quo
 
 // Hàm execute chính để gọi từ mock-trader
 export async function executeLiveTrade(tokenId: string, side: 'BUY' | 'SELL', amountIn: string = '1000000000000000000', traderOdds?: number) {
-  console.log(`\n[LIVE TRADE DISABLED] ĐÃ TẮT ĐÁNH THẬT! Bỏ qua lệnh ${side} cho Token: ${tokenId.substring(0, 8)}..., Amount: ${amountIn}\n`);
-  return { data: { orderId: 'DISABLED_MOCK_ORDER' } };
-
-  /* 
-  // CODE ĐÁNH THẬT ĐÃ ĐƯỢC ẨN BÊN DƯỚI
   try {
     console.log(`[LIVE TRADE] ⏳ Xin quote cho Token: ${tokenId}, Side: ${side}, Amount: ${amountIn}...`);
     const quoteResult = await getPredictionQuote(WALLET_ADDRESS, tokenId, side, amountIn);
@@ -119,20 +114,11 @@ export async function executeLiveTrade(tokenId: string, side: 'BUY' | 'SELL', am
     console.log(`- Lệch (Slippage):    ${traderOdds ? Math.abs(traderOdds - estimatedFillPrice).toFixed(4) : 'N/A'}`);
     console.log(`==============================================\n`);
 
-    // TỰ ĐỘNG BÁN NGAY LẬP TỨC (Dùng cho mục đích test)
-    if (side === 'BUY') {
-      console.log(`[LIVE TRADE] 🚀 Chờ 3 giây để sàn cập nhật số dư, sau đó sẽ tự động BÁN hết toàn bộ để test...`);
-      setTimeout(() => {
-        testSellAll(tokenId).catch(err => console.error('[AUTO SELL ERROR]', err));
-      }, 3000);
-    }
-
     return orderResult;
   } catch (error: any) {
     console.error(`[LIVE TRADE] ❌ Lỗi khi trade:`, error.message);
     throw error;
   }
-  */
 }
 
 // ====================================================

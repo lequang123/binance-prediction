@@ -23,6 +23,22 @@ let lastError: string | null = null;
  * Single poll cycle: fetch → normalize → diff → log
  */
 async function pollOnce(): Promise<void> {
+  // Đọc cấu hình từ file (để lấy cập nhật từ frontend)
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const configPath = path.join(process.cwd(), '.backend_config.json');
+    if (fs.existsSync(configPath)) {
+      const configStr = fs.readFileSync(configPath, 'utf8');
+      const configObj = JSON.parse(configStr);
+      if (typeof configObj.realTrade === 'boolean') {
+        isRealTradeEnabled = configObj.realTrade;
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+
   try {
     const activePositions = await fetchActivePositions();
     const timestamp = Math.floor(Date.now() / 1000);
@@ -47,10 +63,51 @@ async function pollOnce(): Promise<void> {
           `Payout: ${trade.payoutMultiplier.toFixed(2)}x | ` +
           `If Win: +$${trade.potentialWin.toFixed(2)}`
         );
+
+        // GỌI API TRADE THẬT TRÊN BINANCE HOẶC SIMULATOR
+        if (trade.action === 'BUY' && trade.tokenId) {
+          // Tính toán số tiền đầu tư: 1/10 lệnh của trader, tối thiểu 1$
+          let investAmount = trade.amountChange / 10;
+          if (investAmount < 1) {
+            investAmount = 1;
+          }
+
+          // Gắn metadata vào trade để frontend có thể hiển thị
+          trade.copyTradeAmount = investAmount;
+          trade.copyTradeMode = isRealTradeEnabled ? 'REAL_TRADE' : 'SIMULATOR';
+
+          // Chuyển sang chuỗi wei (1 USDT = 10^18 WEI). Dùng cách này để tránh lỗi làm tròn precision của JS với số > 9e15
+          const amountInWei = (BigInt(Math.floor(investAmount * 1e6)) * BigInt("1000000000000")).toString();
+
+          if (isRealTradeEnabled) {
+            console.log(`[LIVE TRADE] 🚀 ĐANG VÀO LỆNH THẬT cho TokenID: ${trade.tokenId} với số tiền: $${investAmount.toFixed(2)} (${amountInWei} WEI)`);
+            import('./trade-api').then(({ executeLiveTrade }) => {
+              executeLiveTrade(trade.tokenId!, 'BUY', amountInWei, trade.fillPrice).catch(err => {
+                console.error(`[LIVE TRADE ERROR] Cảnh báo, lệnh thật bị lỗi:`, err.message || err);
+              });
+            });
+          } else {
+            console.log(`[SIMULATOR] 🎯 Đã giả lập copy lệnh BUY cho TokenID: ${trade.tokenId} với số tiền dự kiến: $${investAmount.toFixed(2)} (Không tốn tiền thật)`);
+          }
+        }
       }
 
       cachedSnapshot = snapshot;
       cachedTimestamp = timestamp;
+    } else {
+      // Nếu không có vị thế nào, vẫn cập nhật timestamp để frontend biết backend vẫn đang sống
+      cachedSnapshot = null;
+      cachedTimestamp = timestamp;
+    }
+
+    // Luôn luôn lưu state ra file để frontend đọc, kể cả khi không có lệnh nào (snapshot = null)
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const filePath = path.join(process.cwd(), '.backend_state.json');
+      fs.writeFileSync(filePath, JSON.stringify(getCachedData()));
+    } catch (e) {
+      console.error('[POLLER] Lỗi khi ghi file state:', e);
     }
 
     pollCount++;
@@ -73,15 +130,21 @@ async function pollOnce(): Promise<void> {
   }
 }
 
+let isRealTradeEnabled = false;
+
 /**
  * Start the background polling loop.
  * Safe to call multiple times — only starts once.
  */
-export function startPoller(): void {
+export function startPoller(config?: { enableRealTrade?: boolean }): void {
+  if (config?.enableRealTrade !== undefined) {
+    isRealTradeEnabled = config.enableRealTrade;
+  }
+
   if (isPolling) return;
   isPolling = true;
 
-  console.log(`[POLLER] Starting background poller (${POLL_INTERVAL_MS}ms interval)`);
+  console.log(`[POLLER] Starting background poller (${POLL_INTERVAL_MS}ms interval). Mode: ${isRealTradeEnabled ? 'REAL TRADE (⚠️ Sẽ trừ tiền thật)' : 'SIMULATOR (Không mất tiền)'}`);
 
   const loop = async () => {
     while (isPolling) {

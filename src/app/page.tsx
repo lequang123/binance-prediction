@@ -6,16 +6,29 @@ import ActivePositions from '@/components/ActivePositions';
 import TradeTimeline from '@/components/TradeTimeline';
 
 import Link from 'next/link';
-import HedgingInsight from '@/components/HedgingInsight';
+import CopyTradeTimeline from '@/components/CopyTradeTimeline';
 import type { DashboardData } from '@/lib/types';
+
+import { useState, useEffect } from 'react';
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
-
-
 export default function Dashboard() {
+  const [realTrade, setRealTrade] = useState(false);
+
+  // Khôi phục trạng thái từ localStorage khi load trang
+  useEffect(() => {
+    const saved = localStorage.getItem('realTradeMode');
+    if (saved === 'true') setRealTrade(true);
+  }, []);
+
+  const handleToggleRealTrade = (val: boolean) => {
+    setRealTrade(val);
+    localStorage.setItem('realTradeMode', val.toString());
+  };
+
   const { data, error, isLoading } = useSWR<DashboardData>(
-    '/api/positions',
+    `/api/positions?realTrade=${realTrade}`,
     fetcher,
     {
       refreshInterval: 500, // Poll every 500ms
@@ -61,16 +74,18 @@ export default function Dashboard() {
         snapshot={active}
         isLive={!error}
         lastUpdate={timestamp}
+        realTrade={realTrade}
+        onToggleRealTrade={handleToggleRealTrade}
       />
 
       {/* Active Positions — Full Width */}
       <ActivePositions snapshot={active} />
 
 
-      {/* Trade Timeline + Hedging Analysis — 2 columns */}
+      {/* 2 columns: Trade Timeline (Trader) & Copy Trade Timeline (Bot) */}
       <div className="dashboard-grid">
         <TradeTimeline trades={trades} />
-        <HedgingInsight trades={trades} />
+        <CopyTradeTimeline trades={trades} />
       </div>
 
       {/* Win/Loss History Link */}

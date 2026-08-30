@@ -116,6 +116,9 @@ export interface DetectedTrade {
   strategyNote: string;
   // Previous hedge ratio for comparison
   prevHedgeRatio: number;
+  // Copy Trade status
+  copyTradeMode?: 'SIMULATOR' | 'REAL_TRADE';
+  copyTradeAmount?: number;
 }
 
 /** Compact snapshot for JSONL logging */
