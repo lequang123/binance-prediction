@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "pull-odds": "npx tsx scripts/odds-puller.ts",
     "lint": "eslint",
     "start-all": "concurrently \"npm run dev\" \"npx tsx run_backend.ts\""
   },

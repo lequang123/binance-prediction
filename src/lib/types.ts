@@ -187,3 +187,66 @@ export interface PaginatedHistoryResponse {
   page: number;
   pageSize: number;
 }
+
+// ============================================================
+// Odds Statistics Types
+// ============================================================
+
+/** Odds snapshot recorded every 1 second */
+export interface OddsSnapshot {
+  ts: number;           // timestamp (ms)
+  mtid: number;         // marketTopicId
+  up: number;           // upPrice (0-1)
+  dn: number;           // downPrice (0-1)
+  tr: number;           // timeRemaining (seconds)
+  mb: string;           // minuteBucket: "5-4m", "4-3m", ...
+}
+
+/** Result of a resolved round */
+export interface RoundResult {
+  mtid: number;         // marketTopicId
+  winner: 'Up' | 'Down';
+  startPrice: number;   // BTC start price
+  endPrice: number;     // BTC end price
+  volume: number;
+  startDate: number;
+  endDate: number;
+}
+
+/**
+ * Per-round, per-bucket entry: records the FIRST TIME odds entered a bucket.
+ * Each round × oddsBucket × minuteBucket combination is counted only once.
+ */
+export interface RoundOddsBucketEntry {
+  mtid: number;
+  oddsBucket: string;       // "50-60", "60-70", "70-80", "80-90", "90+"
+  minuteBucket: string;     // "5-4m", "4-3m", "3-2m", "2-1m", "1-0m"
+  favoriteSide: 'Up' | 'Down';
+  favoriteOdds: number;     // actual odds at first touch
+  ts: number;               // timestamp of first touch
+}
+
+/** Aggregated win rate for a specific odds × time bucket */
+export interface OddsBucketWinRate {
+  oddsBucket: string;
+  minuteBucket: string;
+  totalRounds: number;
+  favoriteWins: number;
+  favoriteWinRate: number;
+  reversals: number;
+  reversalRate: number;
+  avgFavoriteOdds: number;
+  evFavorite: number;       // Expected Value buying favorite
+  evUnderdog: number;       // Expected Value buying underdog
+}
+
+/** Full stats result */
+export interface OddsStatsResult {
+  totalSnapshots: number;
+  totalRounds: number;
+  resolvedRounds: number;
+  collectingSince: number | null;  // timestamp
+  winRateTable: OddsBucketWinRate[];
+  overallUpWinRate: number;
+  overallDownWinRate: number;
+}

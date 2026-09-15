@@ -275,7 +275,7 @@ export function diffSnapshots(
       // Đọc trạng thái config từ options
       let isRealTradeEnabled = options?.isRealTradeEnabled ?? false;
 
-      let investAmount = trade.amountChange / 10;
+      let investAmount = trade.amountChange / 20;
       if (investAmount < 1) investAmount = 1;
 
       trade.copyTradeAmount = investAmount;

@@ -1,6 +1,7 @@
 'use client';
 
-import { Activity, Wallet, Clock, Edit2, Check, X } from 'lucide-react';
+import Link from 'next/link';
+import { Activity, Wallet, Clock, Edit2, Check, X, BarChart3 } from 'lucide-react';
 import type { MarketSnapshot } from '@/lib/types';
 import { useState, useEffect, useRef } from 'react';
 
@@ -146,6 +147,26 @@ export default function Header({ snapshot, isLive, lastUpdate, realTrade = false
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Link
+            href="/stats"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              background: 'rgba(99, 102, 241, 0.15)',
+              border: '1px solid rgba(99, 102, 241, 0.3)',
+              color: '#a5b4fc',
+              padding: '6px 12px',
+              borderRadius: 20,
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              textDecoration: 'none',
+            }}
+          >
+            <BarChart3 size={13} />
+            <span>Thống kê Odds</span>
+          </Link>
+
           {/* Toggle Real Trade / Simulator */}
           <div
             style={{
