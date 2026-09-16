@@ -1,7 +1,11 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { OddsStatsResult, OddsBucketWinRate } from '@/lib/types';
+import type {
+  OddsStatsResult,
+  OddsBucketWinRate,
+  TradingSession,
+} from '@/lib/types';
 import styles from './stats.module.css';
 
 interface CollectorStatus {
@@ -20,8 +24,27 @@ interface StatsResponse {
   stats: OddsStatsResult;
 }
 
-const ODDS_BUCKETS = ['50-60', '60-70', '70-80', '80-90', '90+'];
+const ODDS_BUCKETS = [
+  '50-55',
+  '55-60',
+  '60-65',
+  '65-70',
+  '70-75',
+  '75-80',
+  '80-85',
+  '85-90',
+  '90-95',
+  '95+',
+];
 const MINUTE_BUCKETS = ['5-4m', '4-3m', '3-2m', '2-1m', '1-0m'];
+
+const SESSIONS: { id: TradingSession; name: string; time: string; icon: string }[] = [
+  { id: 'all', name: 'Tất cả phiên', time: '24/24h', icon: '🌐' },
+  { id: 'asia', name: 'Phiên Á', time: '07:00 - 14:00', icon: '🌏' },
+  { id: 'europe', name: 'Phiên Âu', time: '14:00 - 19:00', icon: '🌍' },
+  { id: 'us', name: 'Phiên Mỹ', time: '19:00 - 23:00', icon: '🌎' },
+  { id: 'night', name: 'Phiên Đêm', time: '23:00 - 07:00', icon: '🌙' },
+];
 
 function formatDuration(ms: number): string {
   const seconds = Math.floor(ms / 1000);
@@ -63,16 +86,35 @@ function getEVColor(ev: number, samples: number): string {
   return 'var(--cell-ev-very-negative)';
 }
 
+function getStreakColor(maxLoss: number, samples: number): string {
+  if (samples === 0) return 'var(--cell-empty)';
+  if (maxLoss <= 1) return 'rgba(34, 197, 94, 0.35)';
+  if (maxLoss <= 2) return 'rgba(34, 197, 94, 0.2)';
+  if (maxLoss <= 3) return 'rgba(234, 179, 8, 0.25)';
+  if (maxLoss <= 5) return 'rgba(239, 68, 68, 0.25)';
+  return 'rgba(239, 68, 68, 0.45)';
+}
+
+function getStreakBadgeClass(maxLoss: number): string {
+  if (maxLoss <= 2) return styles.streakSafe;
+  if (maxLoss <= 3) return styles.streakWarning;
+  return styles.streakDanger;
+}
+
 export default function StatsPage() {
   const [data, setData] = useState<StatsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState(false);
-  const [activeTab, setActiveTab] = useState<'winrate' | 'reversal' | 'ev'>('winrate');
+  const [selectedSession, setSelectedSession] = useState<TradingSession>('all');
+  const [activeTab, setActiveTab] = useState<'winrate' | 'reversal' | 'ev' | 'streak'>('winrate');
+  const [importing, setImporting] = useState(false);
+  const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const fetchStats = useCallback(async () => {
+  const fetchStats = useCallback(async (session: TradingSession = selectedSession) => {
     try {
-      const res = await fetch('/api/stats', { cache: 'no-store' });
+      const res = await fetch(`/api/stats?session=${session}`, { cache: 'no-store' });
       const json = await res.json();
       setData(json);
     } catch (err) {
@@ -80,15 +122,21 @@ export default function StatsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedSession]);
 
   useEffect(() => {
-    fetchStats();
-    intervalRef.current = setInterval(fetchStats, 5000);
+    fetchStats(selectedSession);
+    intervalRef.current = setInterval(() => fetchStats(selectedSession), 5000);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [fetchStats]);
+  }, [fetchStats, selectedSession]);
+
+  const handleSessionChange = (session: TradingSession) => {
+    setSelectedSession(session);
+    setLoading(true);
+    fetchStats(session);
+  };
 
   const toggleCollector = async () => {
     if (!data) return;
@@ -100,11 +148,55 @@ export default function StatsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action }),
       });
-      await fetchStats();
+      await fetchStats(selectedSession);
     } catch (err) {
       console.error('Failed to toggle collector:', err);
     } finally {
       setToggling(false);
+    }
+  };
+
+  const handleExportBackup = () => {
+    window.open('/api/stats/backup', '_blank');
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImporting(true);
+    setNotice(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch('/api/stats/backup', {
+        method: 'POST',
+        body: formData,
+      });
+      const json = await res.json();
+
+      if (json.ok) {
+        setNotice({ type: 'success', text: `✅ ${json.message}` });
+        await fetchStats(selectedSession);
+      } else {
+        setNotice({ type: 'error', text: `❌ ${json.message || 'Lỗi khi nhập dữ liệu'}` });
+      }
+    } catch (err) {
+      setNotice({
+        type: 'error',
+        text: `❌ Lỗi tải file: ${err instanceof Error ? err.message : 'Unknown error'}`,
+      });
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -117,7 +209,11 @@ export default function StatsPage() {
     );
   };
 
-  if (loading) {
+  const getRowSummary = (oddsBucket: string) => {
+    return data?.stats.rowSummaries?.find((r) => r.oddsBucket === oddsBucket);
+  };
+
+  if (loading && !data) {
     return (
       <div className={styles.container}>
         <div className={styles.loading}>⏳ Đang tải dữ liệu thống kê...</div>
@@ -132,6 +228,65 @@ export default function StatsPage() {
         <a href="/" className={styles.backLink}>
           ← Quay lại Dashboard
         </a>
+      </div>
+
+      {/* Backup / Export / Import Toolbar */}
+      <div className={styles.backupBar}>
+        <div className={styles.backupInfo}>
+          <span>📦 Dữ liệu logs:</span>
+          <span className={styles.backupBadge}>
+            {data?.stats.resolvedRounds ?? 0} kỳ resolved ({data?.stats.totalRounds ?? 0} kỳ chạm odds)
+          </span>
+        </div>
+        <div className={styles.backupActions}>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept=".json,.jsonl"
+            style={{ display: 'none' }}
+          />
+          <button
+            className={styles.exportBtn}
+            onClick={handleExportBackup}
+            title="Tải về file backup JSON chứa toàn bộ dữ liệu kỳ và odds"
+          >
+            ⬇️ Xuất Backup (.json)
+          </button>
+          <button
+            className={styles.importBtn}
+            onClick={handleImportClick}
+            disabled={importing}
+            title="Tải lên file backup JSON hoặc JSONL để khôi phục dữ liệu sau khi deploy"
+          >
+            {importing ? '⏳ Đang nhập...' : '⬆️ Nhập Backup'}
+          </button>
+        </div>
+      </div>
+
+      {/* Notice Banner */}
+      {notice && (
+        <div
+          className={`${styles.backupNotice} ${notice.type === 'success' ? styles.noticeSuccess : styles.noticeError}`}
+        >
+          {notice.text}
+        </div>
+      )}
+
+      {/* Session Filter Selector */}
+      <div className={styles.sessionSelector}>
+        {SESSIONS.map((s) => (
+          <button
+            key={s.id}
+            className={`${styles.sessionBtn} ${selectedSession === s.id ? styles.sessionBtnActive : ''}`}
+            onClick={() => handleSessionChange(s.id)}
+          >
+            <span className={styles.sessionName}>
+              {s.icon} {s.name}
+            </span>
+            <span className={styles.sessionTime}>{s.time}</span>
+          </button>
+        ))}
       </div>
 
       {/* Collector Status Card */}
@@ -217,6 +372,12 @@ export default function StatsPage() {
           🏆 Tỉ lệ thắng
         </button>
         <button
+          className={`${styles.tab} ${activeTab === 'streak' ? styles.tabActive : ''}`}
+          onClick={() => setActiveTab('streak')}
+        >
+          📉 Chuỗi thua liên tục
+        </button>
+        <button
           className={`${styles.tab} ${activeTab === 'reversal' ? styles.tabActive : ''}`}
           onClick={() => setActiveTab('reversal')}
         >
@@ -234,18 +395,19 @@ export default function StatsPage() {
       {data?.stats.resolvedRounds === 0 ? (
         <div className={styles.emptyState}>
           <div className={styles.emptyIcon}>📊</div>
-          <h3>Chưa có dữ liệu</h3>
+          <h3>Chưa có dữ liệu cho phiên này</h3>
           <p>
-            Bấm &quot;Bắt đầu thu thập&quot; và chờ ít nhất 2-3 kỳ (10-15 phút) để có kết quả
-            thống kê.
+            Không tìm thấy kỳ nào trong khung giờ{' '}
+            {SESSIONS.find((s) => s.id === selectedSession)?.name}. Hãy chọn &quot;Tất cả phiên&quot; hoặc thu thập thêm dữ liệu.
           </p>
         </div>
       ) : (
         <div className={styles.tableContainer}>
           <div className={styles.tableInfo}>
             <span>
-              {activeTab === 'winrate' && '% Favorite thắng — Mỗi kỳ chỉ tính 1 lần (lần đầu odds chạm bucket)'}
-              {activeTab === 'reversal' && '% Đảo chiều — Khi odds cao cho 1 bên nhưng bên kia thắng'}
+              {activeTab === 'winrate' && '% Favorite thắng & Chuỗi thua tối đa (Max L) — Mỗi kỳ chỉ tính 1 lần'}
+              {activeTab === 'streak' && 'Chuỗi thua liên tục tối đa (Max Consecutive Losses) — Số kỳ Favorite thua liên tiếp khi ô đó xuất hiện'}
+              {activeTab === 'reversal' && '% Đảo chiều — Khi odds cao cho 1 bên nhưng bên kia thắng (Underdog ăn)'}
               {activeTab === 'ev' && 'EV (Expected Value) — Giá trị kỳ vọng mỗi $1 đặt cược (đã trừ 2% fee)'}
             </span>
           </div>
@@ -261,82 +423,197 @@ export default function StatsPage() {
                     {mb}
                   </th>
                 ))}
+                <th className={styles.summaryHeader}>
+                  Tổng mức Odds (All mins)
+                </th>
               </tr>
             </thead>
             <tbody>
-              {ODDS_BUCKETS.map((ob) => (
-                <tr key={ob}>
-                  <td className={styles.rowHeader}>{ob}%</td>
-                  {MINUTE_BUCKETS.map((mb) => {
-                    const cell = getCell(ob, mb);
-                    const n = cell?.totalRounds ?? 0;
+              {ODDS_BUCKETS.map((ob) => {
+                const rowSummary = getRowSummary(ob);
+                const rowN = rowSummary?.totalRounds ?? 0;
 
-                    if (activeTab === 'winrate') {
-                      const rate = cell?.favoriteWinRate ?? 0;
+                return (
+                  <tr key={ob}>
+                    <td className={styles.rowHeader}>{ob}%</td>
+                    {MINUTE_BUCKETS.map((mb) => {
+                      const cell = getCell(ob, mb);
+                      const n = cell?.totalRounds ?? 0;
+                      const maxL = cell?.maxConsecutiveLosses ?? 0;
+                      const curL = cell?.currentLossStreak ?? 0;
+
+                      // Tab 1: Win Rate
+                      if (activeTab === 'winrate') {
+                        const rate = cell?.favoriteWinRate ?? 0;
+                        return (
+                          <td
+                            key={mb}
+                            className={styles.dataCell}
+                            style={{ backgroundColor: getWinRateColor(rate, n) }}
+                            title={`${n} kỳ | Thắng: ${cell?.favoriteWins ?? 0} | Thua: ${cell?.reversals ?? 0} | Thua liên tiếp max: ${maxL} (hiện tại: ${curL})`}
+                          >
+                            <span className={styles.cellValue}>
+                              {n > 0 ? (rate * 100).toFixed(1) + '%' : '—'}
+                            </span>
+                            {n > 0 && (
+                              <span className={`${styles.streakBadge} ${getStreakBadgeClass(maxL)}`}>
+                                Max L: {maxL}
+                              </span>
+                            )}
+                            <span className={styles.cellSample}>
+                              {n > 0 ? `n=${n}` : ''}
+                            </span>
+                          </td>
+                        );
+                      }
+
+                      // Tab 2: Consecutive Losses Streak
+                      if (activeTab === 'streak') {
+                        return (
+                          <td
+                            key={mb}
+                            className={styles.dataCell}
+                            style={{ backgroundColor: getStreakColor(maxL, n) }}
+                            title={`${n} kỳ | Chuỗi thua max: ${maxL} kỳ liên tiếp | Chuỗi thua hiện tại: ${curL}`}
+                          >
+                            <span className={styles.cellValue}>
+                              {n > 0 ? `Max: ${maxL}` : '—'}
+                            </span>
+                            <span className={styles.cellSubValue}>
+                              {n > 0 ? `Hiện tại: ${curL}` : ''}
+                            </span>
+                            <span className={styles.cellSample}>
+                              {n > 0 ? `n=${n}` : ''}
+                            </span>
+                          </td>
+                        );
+                      }
+
+                      // Tab 3: Reversals
+                      if (activeTab === 'reversal') {
+                        const rate = cell?.reversalRate ?? 0;
+                        return (
+                          <td
+                            key={mb}
+                            className={styles.dataCell}
+                            style={{ backgroundColor: getReversalColor(rate, n) }}
+                            title={`${n} kỳ | Đảo chiều: ${cell?.reversals ?? 0}`}
+                          >
+                            <span className={styles.cellValue}>
+                              {n > 0 ? (rate * 100).toFixed(1) + '%' : '—'}
+                            </span>
+                            <span className={styles.cellSample}>
+                              {n > 0 ? `n=${n}` : ''}
+                            </span>
+                          </td>
+                        );
+                      }
+
+                      // Tab 4: EV
+                      const evF = cell?.evFavorite ?? 0;
+                      const evU = cell?.evUnderdog ?? 0;
                       return (
                         <td
                           key={mb}
                           className={styles.dataCell}
-                          style={{ backgroundColor: getWinRateColor(rate, n) }}
-                          title={`${n} kỳ | Thắng: ${cell?.favoriteWins ?? 0} | Thua: ${cell?.reversals ?? 0}`}
+                          style={{ backgroundColor: getEVColor(evF, n) }}
+                          title={`Favorite EV: ${evF >= 0 ? '+' : ''}${(evF * 100).toFixed(1)}¢ | Underdog EV: ${evU >= 0 ? '+' : ''}${(evU * 100).toFixed(1)}¢ per $1`}
                         >
                           <span className={styles.cellValue}>
-                            {n > 0 ? (rate * 100).toFixed(1) + '%' : '—'}
+                            {n > 0
+                              ? `${evF >= 0 ? '+' : ''}${(evF * 100).toFixed(0)}¢`
+                              : '—'}
+                          </span>
+                          <span className={styles.cellSubValue}>
+                            {n > 0
+                              ? `U: ${evU >= 0 ? '+' : ''}${(evU * 100).toFixed(0)}¢`
+                              : ''}
                           </span>
                           <span className={styles.cellSample}>
                             {n > 0 ? `n=${n}` : ''}
                           </span>
                         </td>
                       );
-                    }
+                    })}
 
-                    if (activeTab === 'reversal') {
-                      const rate = cell?.reversalRate ?? 0;
-                      return (
-                        <td
-                          key={mb}
-                          className={styles.dataCell}
-                          style={{ backgroundColor: getReversalColor(rate, n) }}
-                          title={`${n} kỳ | Đảo chiều: ${cell?.reversals ?? 0}`}
-                        >
-                          <span className={styles.cellValue}>
-                            {n > 0 ? (rate * 100).toFixed(1) + '%' : '—'}
-                          </span>
-                          <span className={styles.cellSample}>
-                            {n > 0 ? `n=${n}` : ''}
-                          </span>
-                        </td>
-                      );
-                    }
-
-                    // EV tab - show EV for both favorite and underdog
-                    const evF = cell?.evFavorite ?? 0;
-                    const evU = cell?.evUnderdog ?? 0;
-                    return (
+                    {/* Summary Cell for the whole Odds Row */}
+                    {activeTab === 'winrate' && (
                       <td
-                        key={mb}
-                        className={styles.dataCell}
-                        style={{ backgroundColor: getEVColor(evF, n) }}
-                        title={`Favorite EV: ${evF >= 0 ? '+' : ''}${(evF * 100).toFixed(1)}¢ | Underdog EV: ${evU >= 0 ? '+' : ''}${(evU * 100).toFixed(1)}¢ per $1`}
+                        className={styles.summaryCell}
+                        style={{ backgroundColor: getWinRateColor(rowSummary?.favoriteWinRate ?? 0, rowN) }}
+                        title={`Tổng mức ${ob}%: ${rowN} kỳ | Thắng: ${rowSummary?.favoriteWins ?? 0} | Thua: ${rowSummary?.reversals ?? 0} | Chuỗi thua max: ${rowSummary?.maxConsecutiveLosses ?? 0}`}
                       >
                         <span className={styles.cellValue}>
-                          {n > 0
-                            ? `${evF >= 0 ? '+' : ''}${(evF * 100).toFixed(0)}¢`
+                          {rowN > 0 ? ((rowSummary?.favoriteWinRate ?? 0) * 100).toFixed(1) + '%' : '—'}
+                        </span>
+                        {rowN > 0 && (
+                          <span className={`${styles.streakBadge} ${getStreakBadgeClass(rowSummary?.maxConsecutiveLosses ?? 0)}`}>
+                            Max L: {rowSummary?.maxConsecutiveLosses ?? 0}
+                          </span>
+                        )}
+                        <span className={styles.cellSample}>
+                          {rowN > 0 ? `n=${rowN}` : ''}
+                        </span>
+                      </td>
+                    )}
+
+                    {activeTab === 'streak' && (
+                      <td
+                        className={styles.summaryCell}
+                        style={{ backgroundColor: getStreakColor(rowSummary?.maxConsecutiveLosses ?? 0, rowN) }}
+                        title={`Tổng mức ${ob}%: Chuỗi thua max: ${rowSummary?.maxConsecutiveLosses ?? 0} kỳ liên tiếp | Chuỗi thua hiện tại: ${rowSummary?.currentLossStreak ?? 0}`}
+                      >
+                        <span className={styles.cellValue}>
+                          {rowN > 0 ? `Max: ${rowSummary?.maxConsecutiveLosses ?? 0}` : '—'}
+                        </span>
+                        <span className={styles.cellSubValue}>
+                          {rowN > 0 ? `Hiện tại: ${rowSummary?.currentLossStreak ?? 0}` : ''}
+                        </span>
+                        <span className={styles.cellSample}>
+                          {rowN > 0 ? `n=${rowN}` : ''}
+                        </span>
+                      </td>
+                    )}
+
+                    {activeTab === 'reversal' && (
+                      <td
+                        className={styles.summaryCell}
+                        style={{ backgroundColor: getReversalColor(rowSummary?.reversalRate ?? 0, rowN) }}
+                        title={`Tổng mức ${ob}%: Đảo chiều ${rowSummary?.reversals ?? 0}/${rowN}`}
+                      >
+                        <span className={styles.cellValue}>
+                          {rowN > 0 ? ((rowSummary?.reversalRate ?? 0) * 100).toFixed(1) + '%' : '—'}
+                        </span>
+                        <span className={styles.cellSample}>
+                          {rowN > 0 ? `n=${rowN}` : ''}
+                        </span>
+                      </td>
+                    )}
+
+                    {activeTab === 'ev' && (
+                      <td
+                        className={styles.summaryCell}
+                        style={{ backgroundColor: getEVColor(rowSummary?.evFavorite ?? 0, rowN) }}
+                        title={`Tổng mức ${ob}%: EV Favorite ${(rowSummary?.evFavorite ?? 0) >= 0 ? '+' : ''}${(((rowSummary?.evFavorite ?? 0) * 100)).toFixed(1)}¢ | EV Underdog ${(rowSummary?.evUnderdog ?? 0) >= 0 ? '+' : ''}${(((rowSummary?.evUnderdog ?? 0) * 100)).toFixed(1)}¢`}
+                      >
+                        <span className={styles.cellValue}>
+                          {rowN > 0
+                            ? `${(rowSummary?.evFavorite ?? 0) >= 0 ? '+' : ''}${((rowSummary?.evFavorite ?? 0) * 100).toFixed(0)}¢`
                             : '—'}
                         </span>
                         <span className={styles.cellSubValue}>
-                          {n > 0
-                            ? `U: ${evU >= 0 ? '+' : ''}${(evU * 100).toFixed(0)}¢`
+                          {rowN > 0
+                            ? `U: ${(rowSummary?.evUnderdog ?? 0) >= 0 ? '+' : ''}${((rowSummary?.evUnderdog ?? 0) * 100).toFixed(0)}¢`
                             : ''}
                         </span>
                         <span className={styles.cellSample}>
-                          {n > 0 ? `n=${n}` : ''}
+                          {rowN > 0 ? `n=${rowN}` : ''}
                         </span>
                       </td>
-                    );
-                  })}
-                </tr>
-              ))}
+                    )}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
 
@@ -385,7 +662,15 @@ export default function StatsPage() {
                   />
                   &lt;35%
                 </span>
+                <span className={styles.legendNote}>
+                  | <strong style={{ color: '#86efac' }}>Max L: X</strong> là số kỳ thua liên tục tối đa của ô/mức đó
+                </span>
               </>
+            )}
+            {activeTab === 'streak' && (
+              <span className={styles.legendNote}>
+                🟢 Xanh (Max L ≤ 2): Chuỗi thua ít, an toàn | 🟡 Vàng (Max L = 3): Cảnh báo vừa | 🔴 Đỏ (Max L ≥ 4): Rủi ro chuỗi thua cao
+              </span>
             )}
             {activeTab === 'reversal' && (
               <span className={styles.legendNote}>
@@ -407,7 +692,10 @@ export default function StatsPage() {
           Mỗi kỳ chỉ tính 1 lần (lần đầu odds chạm bucket đó).
         </p>
         <p>
-          📌 <strong>Gợi ý</strong>: Chạy collector liên tục ít nhất vài giờ (50+ kỳ) để có dữ liệu đáng tin cậy.
+          📌 <strong>Khung giờ các phiên (GMT+7)</strong>: Phiên Á (07:00 - 14:00) • Phiên Âu (14:00 - 19:00) • Phiên Mỹ (19:00 - 23:00) • Phiên Đêm (23:00 - 07:00).
+        </p>
+        <p>
+          🎯 <strong>Quản lý vốn</strong>: Chỉ số <code>Max L</code> (Chuỗi thua liên tiếp) giúp bạn xác định mức drawdown tối đa để chia volume cược, tránh cháy tài khoản khi thị trường đi vào chuỗi bão lật kèo.
         </p>
       </div>
     </div>

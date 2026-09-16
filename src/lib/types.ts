@@ -217,6 +217,8 @@ export interface RoundResult {
  * Per-round, per-bucket entry: records the FIRST TIME odds entered a bucket.
  * Each round × oddsBucket × minuteBucket combination is counted only once.
  */
+export type TradingSession = 'all' | 'asia' | 'europe' | 'us' | 'night';
+
 export interface RoundOddsBucketEntry {
   mtid: number;
   oddsBucket: string;       // "50-60", "60-70", "70-80", "80-90", "90+"
@@ -238,6 +240,23 @@ export interface OddsBucketWinRate {
   avgFavoriteOdds: number;
   evFavorite: number;       // Expected Value buying favorite
   evUnderdog: number;       // Expected Value buying underdog
+  maxConsecutiveLosses: number; // Chuỗi thua liên tục tối đa
+  currentLossStreak: number;    // Chuỗi thua hiện tại
+}
+
+/** Summary for an entire odds row (e.g. all minutes of 80-90%) */
+export interface OddsRowSummary {
+  oddsBucket: string;
+  totalRounds: number;
+  favoriteWins: number;
+  favoriteWinRate: number;
+  reversals: number;
+  reversalRate: number;
+  avgFavoriteOdds: number;
+  evFavorite: number;
+  evUnderdog: number;
+  maxConsecutiveLosses: number;
+  currentLossStreak: number;
 }
 
 /** Full stats result */
@@ -246,7 +265,10 @@ export interface OddsStatsResult {
   totalRounds: number;
   resolvedRounds: number;
   collectingSince: number | null;  // timestamp
+  session: TradingSession;
   winRateTable: OddsBucketWinRate[];
+  rowSummaries: OddsRowSummary[];
   overallUpWinRate: number;
   overallDownWinRate: number;
 }
+

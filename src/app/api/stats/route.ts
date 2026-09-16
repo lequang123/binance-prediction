@@ -9,12 +9,19 @@ import {
 } from '@/lib/odds-collector';
 import { computeOddsStats } from '@/lib/odds-stats';
 
+import type { TradingSession } from '@/lib/types';
+
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export async function GET() {
+export async function GET(request: Request) {
   // Always sync latest results and bucket entries from disk
   syncDataFromDisk();
+
+  const { searchParams } = new URL(request.url);
+  const sessionParam = (searchParams.get('session') || 'all') as TradingSession;
+  const validSessions: TradingSession[] = ['all', 'asia', 'europe', 'us', 'night'];
+  const session: TradingSession = validSessions.includes(sessionParam) ? sessionParam : 'all';
 
   const status = getCollectorStatus();
   const entries = getBucketEntries();
@@ -24,7 +31,8 @@ export async function GET() {
     entries,
     results,
     status.snapshotCount,
-    status.collectingSince
+    status.collectingSince,
+    session
   );
 
   return NextResponse.json(

@@ -74,13 +74,18 @@ function getMinuteBucket(timeRemaining: number): string {
   return '1-0m';
 }
 
-function getOddsBucket(odds: number): string {
+export function getOddsBucket(odds: number): string {
   const pct = odds * 100;
-  if (pct >= 90) return '90+';
-  if (pct >= 80) return '80-90';
-  if (pct >= 70) return '70-80';
-  if (pct >= 60) return '60-70';
-  return '50-60';
+  if (pct >= 95) return '95+';
+  if (pct >= 90) return '90-95';
+  if (pct >= 85) return '85-90';
+  if (pct >= 80) return '80-85';
+  if (pct >= 75) return '75-80';
+  if (pct >= 70) return '70-75';
+  if (pct >= 65) return '65-70';
+  if (pct >= 60) return '60-65';
+  if (pct >= 55) return '55-60';
+  return '50-55';
 }
 
 function ensureLogDir(): string {
@@ -430,6 +435,9 @@ export function syncDataFromDisk(): void {
       for (const line of lines) {
         try {
           const entry: RoundOddsBucketEntry = JSON.parse(line);
+          if (entry.favoriteOdds) {
+            entry.oddsBucket = getOddsBucket(entry.favoriteOdds);
+          }
           const key = `${entry.mtid}:${entry.oddsBucket}:${entry.minuteBucket}`;
           if (!existingKeys.has(key)) {
             bucketEntries.push(entry);
@@ -474,3 +482,135 @@ export function loadSavedData(): {
     entries: bucketEntries.length,
   };
 }
+
+export interface LogDataBackup {
+  version: number;
+  exportedAt: number;
+  results: RoundResult[];
+  bucketEntries: RoundOddsBucketEntry[];
+  snapshots: OddsSnapshot[];
+}
+
+/**
+ * Export all collected log data for backup / restore across container redeploys
+ */
+export function exportLogData(): LogDataBackup {
+  syncDataFromDisk();
+  return {
+    version: 1,
+    exportedAt: Date.now(),
+    results: [...results],
+    bucketEntries: [...bucketEntries],
+    snapshots: [...snapshots],
+  };
+}
+
+/**
+ * Import backup log data (merges and deduplicates with existing records on disk and RAM)
+ */
+export function importLogData(backup: {
+  results?: RoundResult[];
+  bucketEntries?: RoundOddsBucketEntry[];
+  snapshots?: OddsSnapshot[];
+}): {
+  importedResults: number;
+  importedEntries: number;
+  importedSnapshots: number;
+  totalResults: number;
+  totalEntries: number;
+} {
+  syncDataFromDisk();
+  const logDir = ensureLogDir();
+
+  let importedResults = 0;
+  let importedEntries = 0;
+  let importedSnapshots = 0;
+
+  // 1. Import round results
+  if (Array.isArray(backup.results) && backup.results.length > 0) {
+    const existingMtids = new Set(results.map((r) => r.mtid));
+    const resultFile = path.join(logDir, 'round_results.jsonl');
+    const newResults: RoundResult[] = [];
+
+    for (const r of backup.results) {
+      if (r && typeof r.mtid === 'number' && (r.winner === 'Up' || r.winner === 'Down')) {
+        if (!existingMtids.has(r.mtid)) {
+          existingMtids.add(r.mtid);
+          results.push(r);
+          newResults.push(r);
+          importedResults++;
+        }
+      }
+    }
+
+    if (newResults.length > 0) {
+      const content = newResults.map((r) => JSON.stringify(r)).join('\n') + '\n';
+      fs.appendFileSync(resultFile, content, 'utf8');
+    }
+    state.resolvedCount = results.length;
+  }
+
+  // 2. Import bucket entries
+  if (Array.isArray(backup.bucketEntries) && backup.bucketEntries.length > 0) {
+    const existingKeys = new Set(
+      bucketEntries.map((e) => `${e.mtid}:${e.oddsBucket}:${e.minuteBucket}`)
+    );
+    const entryFile = path.join(logDir, 'odds_bucket_entries.jsonl');
+    const newEntries: RoundOddsBucketEntry[] = [];
+
+    for (const e of backup.bucketEntries) {
+      if (e && typeof e.mtid === 'number' && (e.oddsBucket || e.favoriteOdds) && e.minuteBucket) {
+        if (e.favoriteOdds) {
+          e.oddsBucket = getOddsBucket(e.favoriteOdds);
+        }
+        const key = `${e.mtid}:${e.oddsBucket}:${e.minuteBucket}`;
+        if (!existingKeys.has(key)) {
+          existingKeys.add(key);
+          seenBuckets.add(key);
+          bucketEntries.push(e);
+          newEntries.push(e);
+          importedEntries++;
+        }
+      }
+    }
+
+    if (newEntries.length > 0) {
+      const content = newEntries.map((e) => JSON.stringify(e)).join('\n') + '\n';
+      fs.appendFileSync(entryFile, content, 'utf8');
+    }
+  }
+
+  // 3. Import snapshots
+  if (Array.isArray(backup.snapshots) && backup.snapshots.length > 0) {
+    const existingTsMtid = new Set(snapshots.map((s) => `${s.mtid}:${s.ts}`));
+    const snapshotFile = path.join(logDir, 'odds_snapshots.jsonl');
+    const newSnapshots: OddsSnapshot[] = [];
+
+    for (const s of backup.snapshots) {
+      if (s && typeof s.mtid === 'number' && typeof s.ts === 'number') {
+        const key = `${s.mtid}:${s.ts}`;
+        if (!existingTsMtid.has(key)) {
+          existingTsMtid.add(key);
+          snapshots.push(s);
+          newSnapshots.push(s);
+          importedSnapshots++;
+        }
+      }
+    }
+
+    if (newSnapshots.length > 0) {
+      const content = newSnapshots.map((s) => JSON.stringify(s)).join('\n') + '\n';
+      fs.appendFileSync(snapshotFile, content, 'utf8');
+    }
+    state.snapshotCount = snapshots.length;
+  }
+
+  return {
+    importedResults,
+    importedEntries,
+    importedSnapshots,
+    totalResults: results.length,
+    totalEntries: bucketEntries.length,
+  };
+}
+
