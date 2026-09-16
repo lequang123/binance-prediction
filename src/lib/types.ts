@@ -260,6 +260,32 @@ export interface OddsRowSummary {
 }
 
 /** Full stats result */
+export interface LossRecordDetail {
+  mtid: number;
+  ts: number;
+  oddsBucket: string;
+  minuteBucket: string;
+  favoriteSide: 'Up' | 'Down';
+  favoriteOdds: number;
+  winner: 'Up' | 'Down';
+  startPrice: number;
+  endPrice: number;
+  shortfall: number;      // Khoảng cách giá thiếu để hòa vốn / thắng ($)
+  shortfallPct: number;   // Khoảng cách theo %
+  category: 'close_call' | 'moderate_reversal' | 'strong_reversal'; // <15, 15-50, >=50
+}
+
+export interface LossAnalysisSummary {
+  totalLosses: number;
+  avgShortfall: number;
+  closeCallCount: number;
+  closeCallPct: number;
+  moderateCount: number;
+  moderatePct: number;
+  strongCount: number;
+  strongPct: number;
+}
+
 export interface OddsStatsResult {
   totalSnapshots: number;
   totalRounds: number;
@@ -270,5 +296,8 @@ export interface OddsStatsResult {
   rowSummaries: OddsRowSummary[];
   overallUpWinRate: number;
   overallDownWinRate: number;
+  lossDetails: LossRecordDetail[];
+  lossSummary: LossAnalysisSummary;
 }
+
 

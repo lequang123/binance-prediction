@@ -9,6 +9,8 @@ import type {
   OddsRowSummary,
   OddsStatsResult,
   TradingSession,
+  LossRecordDetail,
+  LossAnalysisSummary,
 } from './types';
 import { getOddsBucket } from './odds-collector';
 
@@ -90,10 +92,10 @@ export function computeOddsStats(
   collectingSince: number | null,
   sessionFilter: TradingSession = 'all'
 ): OddsStatsResult {
-  // Build result lookup: mtid → winner
-  const resultMap = new Map<number, 'Up' | 'Down'>();
+  // Build result lookup: mtid → RoundResult
+  const resultMap = new Map<number, RoundResult>();
   for (const r of results) {
-    resultMap.set(r.mtid, r.winner);
+    resultMap.set(r.mtid, r);
   }
 
   // Filter results by session if needed
@@ -143,12 +145,15 @@ export function computeOddsStats(
     }
   }
 
+  const lossDetails: LossRecordDetail[] = [];
+
   // Process entries (sorted by ts ascending for streak accuracy)
   const sortedEntries = [...filteredEntries].sort((a, b) => a.ts - b.ts);
 
   for (const entry of sortedEntries) {
-    const winner = resultMap.get(entry.mtid);
-    if (!winner) continue; // Round not yet resolved
+    const roundResult = resultMap.get(entry.mtid);
+    if (!roundResult) continue; // Round not yet resolved
+    const winner = roundResult.winner;
 
     const bucket = entry.favoriteOdds ? getOddsBucket(entry.favoriteOdds) : entry.oddsBucket;
     const isLoss = entry.favoriteSide !== winner;
@@ -167,6 +172,37 @@ export function computeOddsStats(
     if (cellAgg && !cellAgg.roundIds.has(entry.mtid)) {
       cellAgg.roundIds.add(entry.mtid);
       cellAgg.items.push(item);
+
+      if (isLoss) {
+        const shortfall =
+          entry.favoriteSide === 'Up'
+            ? roundResult.startPrice - roundResult.endPrice
+            : roundResult.endPrice - roundResult.startPrice;
+        const shortfallPct =
+          roundResult.startPrice > 0 ? (shortfall / roundResult.startPrice) * 100 : 0;
+
+        let category: 'close_call' | 'moderate_reversal' | 'strong_reversal' = 'moderate_reversal';
+        if (shortfall < 15) {
+          category = 'close_call';
+        } else if (shortfall >= 50) {
+          category = 'strong_reversal';
+        }
+
+        lossDetails.push({
+          mtid: entry.mtid,
+          ts: entry.ts,
+          oddsBucket: bucket,
+          minuteBucket: entry.minuteBucket,
+          favoriteSide: entry.favoriteSide,
+          favoriteOdds: entry.favoriteOdds,
+          winner,
+          startPrice: roundResult.startPrice,
+          endPrice: roundResult.endPrice,
+          shortfall: Math.max(0, shortfall),
+          shortfallPct: Math.max(0, shortfallPct),
+          category,
+        });
+      }
     }
 
     // 2. Add to row (first-touch in that round for the entire odds row)
@@ -277,6 +313,27 @@ export function computeOddsStats(
     totalRoundIds.add(entry.mtid);
   }
 
+  // Sort loss details newest first
+  lossDetails.sort((a, b) => b.ts - a.ts);
+
+  const totalLosses = lossDetails.length;
+  const avgShortfall =
+    totalLosses > 0 ? lossDetails.reduce((sum, l) => sum + l.shortfall, 0) / totalLosses : 0;
+  const closeCallCount = lossDetails.filter((l) => l.category === 'close_call').length;
+  const moderateCount = lossDetails.filter((l) => l.category === 'moderate_reversal').length;
+  const strongCount = lossDetails.filter((l) => l.category === 'strong_reversal').length;
+
+  const lossSummary: LossAnalysisSummary = {
+    totalLosses,
+    avgShortfall,
+    closeCallCount,
+    closeCallPct: totalLosses > 0 ? (closeCallCount / totalLosses) * 100 : 0,
+    moderateCount,
+    moderatePct: totalLosses > 0 ? (moderateCount / totalLosses) * 100 : 0,
+    strongCount,
+    strongPct: totalLosses > 0 ? (strongCount / totalLosses) * 100 : 0,
+  };
+
   return {
     totalSnapshots,
     totalRounds: totalRoundIds.size,
@@ -287,6 +344,8 @@ export function computeOddsStats(
     rowSummaries,
     overallUpWinRate: filteredResults.length > 0 ? upWins / filteredResults.length : 0,
     overallDownWinRate: filteredResults.length > 0 ? downWins / filteredResults.length : 0,
+    lossDetails,
+    lossSummary,
   };
 }
 

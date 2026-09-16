@@ -101,14 +101,31 @@ function getStreakBadgeClass(maxLoss: number): string {
   return styles.streakDanger;
 }
 
+function formatVnTime(ts: number): string {
+  const date = new Date(ts);
+  return date.toLocaleTimeString('vi-VN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+    timeZone: 'Asia/Ho_Chi_Minh',
+  });
+}
+
 export default function StatsPage() {
   const [data, setData] = useState<StatsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState(false);
   const [selectedSession, setSelectedSession] = useState<TradingSession>('all');
-  const [activeTab, setActiveTab] = useState<'winrate' | 'reversal' | 'ev' | 'streak'>('winrate');
+  const [activeTab, setActiveTab] = useState<'winrate' | 'reversal' | 'ev' | 'streak' | 'losses'>('winrate');
   const [importing, setImporting] = useState(false);
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [lossOddsFilter, setLossOddsFilter] = useState<string>('all');
+  const [lossMinuteFilter, setLossMinuteFilter] = useState<string>('all');
+  const [lossCategoryFilter, setLossCategoryFilter] = useState<string>('all');
+  const [lossSearch, setLossSearch] = useState<string>('');
+  const [lossPage, setLossPage] = useState<number>(1);
+  const LOSS_PAGE_SIZE = 15;
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -212,6 +229,23 @@ export default function StatsPage() {
   const getRowSummary = (oddsBucket: string) => {
     return data?.stats.rowSummaries?.find((r) => r.oddsBucket === oddsBucket);
   };
+
+  const filteredLosses = (data?.stats.lossDetails || []).filter((l) => {
+    if (lossOddsFilter !== 'all' && l.oddsBucket !== lossOddsFilter) return false;
+    if (lossMinuteFilter !== 'all' && l.minuteBucket !== lossMinuteFilter) return false;
+    if (lossCategoryFilter !== 'all' && l.category !== lossCategoryFilter) return false;
+    if (lossSearch.trim()) {
+      const q = lossSearch.trim().toLowerCase();
+      if (!String(l.mtid).includes(q) && !l.oddsBucket.includes(q)) return false;
+    }
+    return true;
+  });
+
+  const totalLossPages = Math.max(1, Math.ceil(filteredLosses.length / LOSS_PAGE_SIZE));
+  const currentPageLosses = filteredLosses.slice(
+    (lossPage - 1) * LOSS_PAGE_SIZE,
+    lossPage * LOSS_PAGE_SIZE
+  );
 
   if (loading && !data) {
     return (
@@ -389,10 +423,214 @@ export default function StatsPage() {
         >
           💰 Expected Value
         </button>
+        <button
+          className={`${styles.tab} ${activeTab === 'losses' ? styles.tabActive : ''}`}
+          onClick={() => {
+            setActiveTab('losses');
+            setLossPage(1);
+          }}
+        >
+          🔍 Chi tiết ca thua & Giá lệch
+        </button>
       </div>
 
-      {/* Data Table */}
-      {data?.stats.resolvedRounds === 0 ? (
+      {/* Main Content Area */}
+      {activeTab === 'losses' ? (
+        <div className={styles.lossReportContainer}>
+          {/* Summary Cards */}
+          <div className={styles.lossSummaryGrid}>
+            <div className={`${styles.lossCard} ${styles.cardTotal}`}>
+              <span className={styles.lossCardTitle}>Tổng số ca lật kèo</span>
+              <span className={styles.lossCardValue}>{data?.stats.lossSummary?.totalLosses ?? 0}</span>
+              <span className={styles.lossCardSub}>
+                Lệch giá TB: ${data?.stats.lossSummary?.avgShortfall.toFixed(2) ?? '0.00'}
+              </span>
+            </div>
+            <div className={`${styles.lossCard} ${styles.cardCloseCall}`}>
+              <span className={styles.lossCardTitle}>⚡ Sát nút (&lt; $15)</span>
+              <span className={styles.lossCardValue}>
+                {data?.stats.lossSummary?.closeCallCount ?? 0}
+              </span>
+              <span className={styles.lossCardSub}>
+                {(data?.stats.lossSummary?.closeCallPct ?? 0).toFixed(1)}% — Giật giá giây cuối
+              </span>
+            </div>
+            <div className={`${styles.lossCard} ${styles.cardModerate}`}>
+              <span className={styles.lossCardTitle}>🌊 Đảo chiều vừa ($15 - $50)</span>
+              <span className={styles.lossCardValue}>
+                {data?.stats.lossSummary?.moderateCount ?? 0}
+              </span>
+              <span className={styles.lossCardSub}>
+                {(data?.stats.lossSummary?.moderatePct ?? 0).toFixed(1)}% — Bẫy FOMO đầu/giữa phiên
+              </span>
+            </div>
+            <div className={`${styles.lossCard} ${styles.cardStrong}`}>
+              <span className={styles.lossCardTitle}>💥 Sập/Bơm mạnh (&ge; $50)</span>
+              <span className={styles.lossCardValue}>
+                {data?.stats.lossSummary?.strongCount ?? 0}
+              </span>
+              <span className={styles.lossCardSub}>
+                {(data?.stats.lossSummary?.strongPct ?? 0).toFixed(1)}% — Quét nến xu hướng lớn
+              </span>
+            </div>
+          </div>
+
+          {/* Filter Bar */}
+          <div className={styles.lossFilterBar}>
+            <select
+              className={styles.lossFilterSelect}
+              value={lossOddsFilter}
+              onChange={(e) => {
+                setLossOddsFilter(e.target.value);
+                setLossPage(1);
+              }}
+            >
+              <option value="all">Mọi mức Odds</option>
+              {ODDS_BUCKETS.map((ob) => (
+                <option key={ob} value={ob}>
+                  {ob}%
+                </option>
+              ))}
+            </select>
+
+            <select
+              className={styles.lossFilterSelect}
+              value={lossMinuteFilter}
+              onChange={(e) => {
+                setLossMinuteFilter(e.target.value);
+                setLossPage(1);
+              }}
+            >
+              <option value="all">Mọi khung phút</option>
+              {MINUTE_BUCKETS.map((mb) => (
+                <option key={mb} value={mb}>
+                  {mb}
+                </option>
+              ))}
+            </select>
+
+            <select
+              className={styles.lossFilterSelect}
+              value={lossCategoryFilter}
+              onChange={(e) => {
+                setLossCategoryFilter(e.target.value);
+                setLossPage(1);
+              }}
+            >
+              <option value="all">Mọi mức lệch giá</option>
+              <option value="close_call">⚡ Sát nút (&lt; $15)</option>
+              <option value="moderate_reversal">🌊 Đảo chiều ($15 - $50)</option>
+              <option value="strong_reversal">💥 Sập/Bơm mạnh (&ge; $50)</option>
+            </select>
+
+            <input
+              type="text"
+              placeholder="Tìm theo mã kỳ #mtid..."
+              className={styles.lossSearchInput}
+              value={lossSearch}
+              onChange={(e) => {
+                setLossSearch(e.target.value);
+                setLossPage(1);
+              }}
+            />
+          </div>
+
+          {/* Loss Table */}
+          <div className={styles.lossTableWrapper}>
+            <table className={styles.lossTable}>
+              <thead>
+                <tr>
+                  <th>Mã kỳ / Giờ</th>
+                  <th>Cửa trên (Odds lúc vào)</th>
+                  <th>Phút vào</th>
+                  <th>Kết quả ra</th>
+                  <th>Giá Start → End</th>
+                  <th>Khoảng cách thiếu để thắng (ΔP)</th>
+                  <th>Phân loại nguyên nhân</th>
+                </tr>
+              </thead>
+              <tbody>
+                {currentPageLosses.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ textAlign: 'center', padding: '30px' }}>
+                      Không có ca thua nào khớp với bộ lọc
+                    </td>
+                  </tr>
+                ) : (
+                  currentPageLosses.map((l, idx) => (
+                    <tr key={`${l.mtid}-${l.oddsBucket}-${l.minuteBucket}-${idx}`}>
+                      <td>
+                        <strong>#{l.mtid}</strong>
+                        <div style={{ fontSize: '11px', color: '#9aa0a6' }}>
+                          {formatVnTime(l.ts)}
+                        </div>
+                      </td>
+                      <td>
+                        <span className={l.favoriteSide === 'Up' ? styles.badgeUp : styles.badgeDown}>
+                          {l.favoriteSide}
+                        </span>{' '}
+                        <strong>{(l.favoriteOdds * 100).toFixed(1)}%</strong> ({l.oddsBucket}%)
+                      </td>
+                      <td>{l.minuteBucket}</td>
+                      <td>
+                        <span className={l.winner === 'Up' ? styles.badgeUp : styles.badgeDown}>
+                          {l.winner} thắng
+                        </span>
+                      </td>
+                      <td className={styles.priceFlow}>
+                        ${l.startPrice.toLocaleString('en-US', { minimumFractionDigits: 2 })} →{' '}
+                        ${l.endPrice.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td>
+                        <span className={styles.shortfallValue}>
+                          Thiếu ${l.shortfall.toFixed(2)}
+                        </span>{' '}
+                        <span style={{ fontSize: '11px', color: '#9aa0a6' }}>
+                          ({l.shortfallPct.toFixed(3)}%)
+                        </span>
+                      </td>
+                      <td>
+                        {l.category === 'close_call' && (
+                          <span className={styles.badgeCatClose}>⚡ Sát nút (&lt; $15)</span>
+                        )}
+                        {l.category === 'moderate_reversal' && (
+                          <span className={styles.badgeCatMod}>🌊 Đảo chiều ($15-$50)</span>
+                        )}
+                        {l.category === 'strong_reversal' && (
+                          <span className={styles.badgeCatStrong}>💥 Quét mạnh (&ge; $50)</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          {totalLossPages > 1 && (
+            <div className={styles.paginationBar}>
+              <button
+                className={styles.pageBtn}
+                onClick={() => setLossPage((p) => Math.max(1, p - 1))}
+                disabled={lossPage <= 1}
+              >
+                ← Trang trước
+              </button>
+              <span className={styles.pageInfo}>
+                Trang {lossPage} / {totalLossPages} (Tổng {filteredLosses.length} ca)
+              </span>
+              <button
+                className={styles.pageBtn}
+                onClick={() => setLossPage((p) => Math.min(totalLossPages, p + 1))}
+                disabled={lossPage >= totalLossPages}
+              >
+                Trang sau →
+              </button>
+            </div>
+          )}
+        </div>
+      ) : data?.stats.resolvedRounds === 0 ? (
         <div className={styles.emptyState}>
           <div className={styles.emptyIcon}>📊</div>
           <h3>Chưa có dữ liệu cho phiên này</h3>

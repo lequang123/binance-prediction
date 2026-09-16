@@ -585,3 +585,245 @@
 .footer p {
   margin: 4px 0;
 }
+
+/* ── Loss Analysis Report Styles ── */
+
+.lossReportContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.lossSummaryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.lossCard {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: transform 0.2s;
+}
+
+.lossCard:hover {
+  transform: translateY(-2px);
+}
+
+.cardCloseCall {
+  border-left: 4px solid #38bdf8;
+}
+
+.cardModerate {
+  border-left: 4px solid #facc15;
+}
+
+.cardStrong {
+  border-left: 4px solid #f87171;
+}
+
+.cardTotal {
+  border-left: 4px solid #c084fc;
+}
+
+.lossCardTitle {
+  font-size: 13px;
+  color: #9aa0a6;
+  font-weight: 500;
+}
+
+.lossCardValue {
+  font-size: 24px;
+  font-weight: 700;
+  color: #e8eaed;
+}
+
+.lossCardSub {
+  font-size: 12px;
+  color: #9aa0a6;
+}
+
+/* Filter controls */
+.lossFilterBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+
+.lossFilterSelect {
+  background: #1e1e2d;
+  color: #e8eaed;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  outline: none;
+}
+
+.lossFilterSelect:focus {
+  border-color: #8ab4f8;
+}
+
+.lossSearchInput {
+  background: #1e1e2d;
+  color: #e8eaed;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  outline: none;
+  min-width: 160px;
+  flex: 1;
+}
+
+.lossSearchInput:focus {
+  border-color: #8ab4f8;
+}
+
+/* Loss Table */
+.lossTableWrapper {
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(20, 20, 35, 0.5);
+}
+
+.lossTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.lossTable th {
+  background: rgba(255, 255, 255, 0.04);
+  color: #9aa0a6;
+  font-weight: 600;
+  text-align: left;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  white-space: nowrap;
+}
+
+.lossTable td {
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  color: #e8eaed;
+  vertical-align: middle;
+}
+
+.lossTable tr:hover td {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* Badges */
+.badgeUp {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(34, 197, 94, 0.2);
+  color: #4ade80;
+}
+
+.badgeDown {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+}
+
+.badgeCatClose {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.badgeCatMod {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(250, 204, 21, 0.15);
+  color: #facc15;
+  border: 1px solid rgba(250, 204, 21, 0.3);
+}
+
+.badgeCatStrong {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.shortfallValue {
+  font-weight: 700;
+  color: #f87171;
+}
+
+.priceFlow {
+  font-family: monospace;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+
+/* Pagination */
+.paginationBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+}
+
+.pageBtn {
+  background: rgba(255, 255, 255, 0.06);
+  color: #e8eaed;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.pageBtn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.pageBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pageInfo {
+  font-size: 13px;
+  color: #9aa0a6;
+}
+
