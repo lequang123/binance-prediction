@@ -158,6 +158,8 @@ async function fetchEventDetail(): Promise<{
   marketTopicId: number;
   upPrice: number;
   downPrice: number;
+  upTokenId?: string;
+  downTokenId?: string;
   startDate: number;
   endDate: number;
   startPrice: number;
@@ -180,12 +182,53 @@ async function fetchEventDetail(): Promise<{
       marketTopicId: market.marketTopicId,
       upPrice: market.outcomes[0].price,
       downPrice: market.outcomes[1].price,
+      upTokenId: market.outcomes[0].tokenId,
+      downTokenId: market.outcomes[1].tokenId,
       startDate: data.startDate,
       endDate: data.endDate,
       startPrice: data.eventMetadata?.extra?.startPrice ?? 0,
     };
   } catch {
     return null;
+  }
+}
+
+async function fetchRealtimeQuoteForEntry(
+  entry: RoundOddsBucketEntry,
+  favTokenId?: string,
+  undTokenId?: string,
+  logDir?: string
+): Promise<void> {
+  try {
+    const { getPredictionQuote, WALLET_ADDRESS } = await import('./trade-api');
+    const ONE_USD_WEI = '1000000000000000000';
+
+    // Gọi song song cả 2 cửa: Favorite và Đảo chiều (Underdog)
+    const [favQuote, undQuote] = await Promise.allSettled([
+      favTokenId ? getPredictionQuote(WALLET_ADDRESS, favTokenId, 'BUY', ONE_USD_WEI) : Promise.resolve(null),
+      undTokenId ? getPredictionQuote(WALLET_ADDRESS, undTokenId, 'BUY', ONE_USD_WEI) : Promise.resolve(null),
+    ]);
+
+    if (favQuote.status === 'fulfilled' && favQuote.value) {
+      const rawOut = favQuote.value?.amountOut || favQuote.value?.data?.amountOut;
+      if (rawOut) {
+        entry.favAmountOut = Number(BigInt(rawOut)) / 1e18;
+        console.log(`[ODDS COLLECTOR] ⚡ Real-time get-quote Fav: ${entry.favAmountOut.toFixed(4)} shares ($1 cược)`);
+      }
+    }
+
+    if (undQuote.status === 'fulfilled' && undQuote.value) {
+      const rawOut = undQuote.value?.amountOut || undQuote.value?.data?.amountOut;
+      if (rawOut) {
+        entry.undAmountOut = Number(BigInt(rawOut)) / 1e18;
+        console.log(`[ODDS COLLECTOR] ⚡ Real-time get-quote Đảo chiều (Und): ${entry.undAmountOut.toFixed(4)} shares ($1 cược)`);
+      }
+    }
+  } catch (err) {
+    // Fallback automatically
+  } finally {
+    const dir = logDir || ensureLogDir();
+    appendToFile(path.join(dir, 'odds_bucket_entries.jsonl'), entry);
   }
 }
 
@@ -276,6 +319,8 @@ async function pollOnce(): Promise<void> {
     // First-touch dedup: record bucket entry only once per round
     const favoriteOdds = Math.max(detail.upPrice, detail.downPrice);
     const favoriteSide: 'Up' | 'Down' = detail.upPrice >= detail.downPrice ? 'Up' : 'Down';
+    const favoriteTokenId = favoriteSide === 'Up' ? detail.upTokenId : detail.downTokenId;
+    const underdogTokenId = favoriteSide === 'Up' ? detail.downTokenId : detail.upTokenId;
 
     // Only track when odds are actually different (>50%)
     if (favoriteOdds > 0.50) {
@@ -294,7 +339,10 @@ async function pollOnce(): Promise<void> {
           ts: now,
         };
         bucketEntries.push(entry);
-        appendToFile(path.join(logDir, 'odds_bucket_entries.jsonl'), entry);
+
+        // ⚡ GỌI API BINANCE GET-QUOTE THỜI GIAN THỰC ĐỒNG THỜI CẢ 2 CỬA (THUẬN + ĐẢO CHIỀU)
+        // và lưu lại vào disk sau khi có amountOut
+        fetchRealtimeQuoteForEntry(entry, favoriteTokenId, underdogTokenId, logDir);
       }
     }
 
@@ -418,11 +466,11 @@ export function syncDataFromDisk(): void {
             results.push(r);
             existingMtids.add(r.mtid);
           }
-        } catch {}
+        } catch { }
       }
       state.resolvedCount = results.length;
     }
-  } catch {}
+  } catch { }
 
   // 2. Sync odds_bucket_entries.jsonl
   try {
@@ -444,10 +492,10 @@ export function syncDataFromDisk(): void {
             existingKeys.add(key);
             seenBuckets.add(key);
           }
-        } catch {}
+        } catch { }
       }
     }
-  } catch {}
+  } catch { }
 
   // 3. Sync snapshots if empty
   if (snapshots.length === 0) {
@@ -458,10 +506,10 @@ export function syncDataFromDisk(): void {
         for (const line of lines) {
           try {
             snapshots.push(JSON.parse(line));
-          } catch {}
+          } catch { }
         }
       }
-    } catch {}
+    } catch { }
   }
 
   state.snapshotCount = Math.max(state.snapshotCount, snapshots.length);
@@ -612,5 +660,54 @@ export function importLogData(backup: {
     totalResults: results.length,
     totalEntries: bucketEntries.length,
   };
+}
+
+/**
+ * Clear all collected data on disk and in memory (with automatic backup archive)
+ */
+export function clearAllData(): void {
+  const logDir = ensureLogDir();
+
+  // Create an automatic backup before clearing
+  try {
+    const backupDir = path.join(/*turbopackIgnore: true*/ logDir, 'archive');
+    if (!fs.existsSync(/*turbopackIgnore: true*/ backupDir)) {
+      fs.mkdirSync(/*turbopackIgnore: true*/ backupDir, { recursive: true });
+    }
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const files = ['round_results.jsonl', 'odds_bucket_entries.jsonl', 'odds_snapshots.jsonl'];
+    for (const f of files) {
+      const src = path.join(/*turbopackIgnore: true*/ logDir, f);
+      if (fs.existsSync(/*turbopackIgnore: true*/ src) && fs.statSync(/*turbopackIgnore: true*/ src).size > 0) {
+        fs.copyFileSync(src, path.join(/*turbopackIgnore: true*/ backupDir, `${timestamp}_${f}`));
+      }
+    }
+  } catch (e) {
+    console.error('Lỗi khi sao lưu tự động trước khi xóa:', e);
+  }
+
+  // Clear memory
+  snapshots.length = 0;
+  results.length = 0;
+  bucketEntries.length = 0;
+  seenBuckets.clear();
+  state.snapshotCount = 0;
+  state.roundCount = 0;
+  state.resolvedCount = 0;
+  state.errorCount = 0;
+  state.lastError = null;
+
+  // Clear disk files
+  try {
+    const files = ['round_results.jsonl', 'odds_bucket_entries.jsonl', 'odds_snapshots.jsonl'];
+    for (const f of files) {
+      const p = path.join(/*turbopackIgnore: true*/ logDir, f);
+      if (fs.existsSync(/*turbopackIgnore: true*/ p)) {
+        fs.writeFileSync(p, '', 'utf8');
+      }
+    }
+  } catch (e) {
+    console.error('Lỗi khi làm rỗng file log:', e);
+  }
 }
 

@@ -86,6 +86,121 @@ function getEVColor(ev: number, samples: number): string {
   return 'var(--cell-ev-very-negative)';
 }
 
+interface TradePnlResult {
+  stake: number;
+  totalRounds: number;
+  favWins: number;
+  favLosses: number;
+  favTotalLost: number;
+  favTotalWon: number;
+  favNetPnl: number;
+  favPnlPerTrade: number;
+  favRoi: number;
+  favMultiplier: number;
+  favReturnPerWin: number;
+  favProfitPerWin: number;
+  avgFavOddsPct: number;
+
+  undWins: number;
+  undLosses: number;
+  undTotalLost: number;
+  undTotalWon: number;
+  undNetPnl: number;
+  undPnlPerTrade: number;
+  undRoi: number;
+  undMultiplier: number;
+  undReturnPerWin: number;
+  undProfitPerWin: number;
+  avgUndOddsPct: number;
+}
+
+function calculateTradePnl(
+  totalRounds: number,
+  favoriteWins: number,
+  reversals: number,
+  evFavorite: number,
+  evUnderdog: number,
+  avgFavoriteOdds: number,
+  stake: number,
+  avgFavAmountOut?: number,
+  avgUndAmountOut?: number
+): TradePnlResult | null {
+  if (totalRounds <= 0) return null;
+
+  const feeRate = 0.02;
+
+  // Nếu có amountOut thực tế từ API get-quote thời gian thực thì dùng, nếu chưa thì tính theo chuẩn Binance get-quote
+  const favAmountOut = (avgFavAmountOut && avgFavAmountOut > 0)
+    ? avgFavAmountOut * stake
+    : (avgFavoriteOdds > 0 ? (stake * (1 - feeRate)) / avgFavoriteOdds : 0);
+
+  const favReturnPerWin = favAmountOut;
+  const favProfitPerWin = favAmountOut - stake;
+  const favMultiplier = stake > 0 ? favAmountOut / stake : 0;
+  const avgFavOddsPct = avgFavoriteOdds * 100;
+
+  const favTotalLost = reversals * stake;
+  const favTotalWon = favoriteWins * favProfitPerWin;
+  const favNetPnl = totalRounds * evFavorite * stake;
+  const favPnlPerTrade = evFavorite * stake;
+  const favRoi = evFavorite * 100;
+
+  const underdogOdds = Math.max(0, 1 - avgFavoriteOdds);
+  const undAmountOut = (avgUndAmountOut && avgUndAmountOut > 0)
+    ? avgUndAmountOut * stake
+    : (underdogOdds > 0 ? (stake * (1 - feeRate)) / underdogOdds : 0);
+
+  const undReturnPerWin = undAmountOut;
+  const undProfitPerWin = undAmountOut - stake;
+  const undMultiplier = stake > 0 ? undAmountOut / stake : 0;
+  const avgUndOddsPct = underdogOdds * 100;
+
+  const undTotalLost = favoriteWins * stake;
+  const undTotalWon = reversals * undProfitPerWin;
+  const undNetPnl = totalRounds * evUnderdog * stake;
+  const undPnlPerTrade = evUnderdog * stake;
+  const undRoi = evUnderdog * 100;
+
+  return {
+    stake,
+    totalRounds,
+    favWins: favoriteWins,
+    favLosses: reversals,
+    favTotalLost,
+    favTotalWon,
+    favNetPnl,
+    favPnlPerTrade,
+    favRoi,
+    favMultiplier,
+    favReturnPerWin,
+    favProfitPerWin,
+    avgFavOddsPct,
+    undWins: reversals,
+    undLosses: favoriteWins,
+    undTotalLost,
+    undTotalWon,
+    undNetPnl,
+    undPnlPerTrade,
+    undRoi,
+    undMultiplier,
+    undReturnPerWin,
+    undProfitPerWin,
+    avgUndOddsPct,
+  };
+}
+
+function formatUsd(amount: number, forceSign = true): string {
+  const sign = forceSign ? (amount > 0.005 ? '+' : amount < -0.005 ? '-' : '') : '';
+  const abs = Math.abs(amount);
+  if (abs >= 1000) {
+    return `${sign}$${abs.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  }
+  if (abs >= 100) {
+    return `${sign}$${abs.toFixed(0)}`;
+  }
+  return `${sign}$${abs.toFixed(1)}`;
+}
+
 function getStreakColor(maxLoss: number, samples: number): string {
   if (samples === 0) return 'var(--cell-empty)';
   if (maxLoss <= 1) return 'rgba(34, 197, 94, 0.35)';
@@ -118,6 +233,9 @@ export default function StatsPage() {
   const [toggling, setToggling] = useState(false);
   const [selectedSession, setSelectedSession] = useState<TradingSession>('all');
   const [activeTab, setActiveTab] = useState<'winrate' | 'reversal' | 'ev' | 'streak' | 'losses'>('winrate');
+  const [simStake, setSimStake] = useState<number>(10);
+  const [simViewMode, setSimViewMode] = useState<'total' | 'per_trade'>('total');
+  const [simSide, setSimSide] = useState<'both' | 'favorite' | 'underdog'>('both');
   const [importing, setImporting] = useState(false);
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [lossOddsFilter, setLossOddsFilter] = useState<string>('all');
@@ -132,10 +250,12 @@ export default function StatsPage() {
   const fetchStats = useCallback(async (session: TradingSession = selectedSession) => {
     try {
       const res = await fetch(`/api/stats?session=${session}`, { cache: 'no-store' });
+      if (!res.ok) return;
       const json = await res.json();
       setData(json);
     } catch (err) {
-      console.error('Failed to fetch stats:', err);
+      // Khi server restart hoặc dev recompile, browser fetch có thể tạm gián đoạn 1 nhịp
+      // Không crash UI, nhịp 5s tiếp theo sẽ tự động reconnect
     } finally {
       setLoading(false);
     }
@@ -217,6 +337,28 @@ export default function StatsPage() {
     }
   };
 
+  const handleClearData = async () => {
+    if (!window.confirm('Bạn có chắc muốn XÓA SẠCH toàn bộ dữ liệu lịch sử để test dữ liệu mới không?\n(Dữ liệu cũ sẽ được tự động lưu 1 bản sao lưu trong thư mục logs/archive)')) {
+      return;
+    }
+    try {
+      const res = await fetch('/api/stats', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'clear' }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        setNotice({ type: 'success', text: '✅ Đã xóa sạch toàn bộ data cũ! Hệ thống bắt đầu thu thập dữ liệu mới.' });
+        await fetchStats(selectedSession);
+      } else {
+        setNotice({ type: 'error', text: `❌ ${json.message || 'Lỗi khi xóa dữ liệu'}` });
+      }
+    } catch (err) {
+      setNotice({ type: 'error', text: '❌ Lỗi khi gửi yêu cầu xóa' });
+    }
+  };
+
   const getCell = (
     oddsBucket: string,
     minuteBucket: string
@@ -294,6 +436,13 @@ export default function StatsPage() {
             title="Tải lên file backup JSON hoặc JSONL để khôi phục dữ liệu sau khi deploy"
           >
             {importing ? '⏳ Đang nhập...' : '⬆️ Nhập Backup'}
+          </button>
+          <button
+            className={styles.clearBtn}
+            onClick={handleClearData}
+            title="Xóa toàn bộ dữ liệu cũ để test dữ liệu mới (tự động sao lưu vào logs/archive)"
+          >
+            🗑️ Xóa Data cũ
           </button>
         </div>
       </div>
@@ -421,7 +570,7 @@ export default function StatsPage() {
           className={`${styles.tab} ${activeTab === 'ev' ? styles.tabActive : ''}`}
           onClick={() => setActiveTab('ev')}
         >
-          💰 Expected Value
+          💰 Lời/Lỗ & EV (Trade Thật)
         </button>
         <button
           className={`${styles.tab} ${activeTab === 'losses' ? styles.tabActive : ''}`}
@@ -646,9 +795,94 @@ export default function StatsPage() {
               {activeTab === 'winrate' && '% Favorite thắng & Chuỗi thua tối đa (Max L) — Mỗi kỳ chỉ tính 1 lần'}
               {activeTab === 'streak' && 'Chuỗi thua liên tục tối đa (Max Consecutive Losses) — Số kỳ Favorite thua liên tiếp khi ô đó xuất hiện'}
               {activeTab === 'reversal' && '% Đảo chiều — Khi odds cao cho 1 bên nhưng bên kia thắng (Underdog ăn)'}
-              {activeTab === 'ev' && 'EV (Expected Value) — Giá trị kỳ vọng mỗi $1 đặt cược (đã trừ 2% fee)'}
+              {activeTab === 'ev' && '💰 Mô phỏng Trade Thật & Lợi nhuận kỳ vọng — Tính chuẩn xác số tiền Lời/Lỗ ($) đã trừ 2% phí sàn'}
             </span>
           </div>
+
+          {activeTab === 'ev' && (
+            <div className={styles.simToolbar}>
+              <div className={styles.simGroup}>
+                <span className={styles.simLabel}>💵 Cược mỗi ván:</span>
+                <div className={styles.simBtnGroup}>
+                  {[1, 5, 10, 25, 50, 100].map((amt) => (
+                    <button
+                      key={amt}
+                      type="button"
+                      className={`${styles.simPillBtn} ${simStake === amt ? styles.simPillActive : ''}`}
+                      onClick={() => setSimStake(amt)}
+                    >
+                      ${amt}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="number"
+                  min="1"
+                  max="10000"
+                  value={simStake}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    if (!isNaN(val) && val > 0) setSimStake(val);
+                  }}
+                  className={styles.simInput}
+                  title="Nhập số tiền cược tùy ý ($)"
+                />
+              </div>
+
+              <div className={styles.simGroup}>
+                <span className={styles.simLabel}>📊 Hiển thị:</span>
+                <div className={styles.simBtnGroup}>
+                  <button
+                    type="button"
+                    className={`${styles.simPillBtn} ${simViewMode === 'total' ? styles.simPillActive : ''}`}
+                    onClick={() => setSimViewMode('total')}
+                  >
+                    Tổng Lời/Lỗ ($)
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.simPillBtn} ${simViewMode === 'per_trade' ? styles.simPillActive : ''}`}
+                    onClick={() => setSimViewMode('per_trade')}
+                  >
+                    Mỗi lệnh ($/lệnh & %)
+                  </button>
+                </div>
+              </div>
+
+              <div className={styles.simGroup}>
+                <span className={styles.simLabel}>🎯 Cửa cược:</span>
+                <div className={styles.simBtnGroup}>
+                  <button
+                    type="button"
+                    className={`${styles.simPillBtn} ${simSide === 'both' ? styles.simPillActive : ''}`}
+                    onClick={() => setSimSide('both')}
+                  >
+                    ⚖️ Cả 2 (F & U)
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.simPillBtn} ${simSide === 'favorite' ? styles.simPillActive : ''}`}
+                    onClick={() => setSimSide('favorite')}
+                  >
+                    🔵 Favorite
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.simPillBtn} ${simSide === 'underdog' ? styles.simPillActive : ''}`}
+                    onClick={() => setSimSide('underdog')}
+                  >
+                    🟠 Underdog
+                  </button>
+                </div>
+              </div>
+
+              <div className={styles.simHint}>
+                💡 <strong>Mô phỏng trade thật ${simStake}/kỳ</strong> (đã trừ 2% phí sàn).{' '}
+                <span className={styles.textGreen}>Màu xanh = Có lãi ròng</span> •{' '}
+                <span className={styles.textRed}>Màu đỏ = Thua lỗ ròng</span>. Rê chuột vào từng ô để xem chi tiết số tiền THẮNG ĐƯỢC và THUA MẤT.
+              </div>
+            </div>
+          )}
 
           <table className={styles.table}>
             <thead>
@@ -747,31 +981,92 @@ export default function StatsPage() {
                         );
                       }
 
-                      // Tab 4: EV
-                      const evF = cell?.evFavorite ?? 0;
-                      const evU = cell?.evUnderdog ?? 0;
-                      return (
-                        <td
-                          key={mb}
-                          className={styles.dataCell}
-                          style={{ backgroundColor: getEVColor(evF, n) }}
-                          title={`Favorite EV: ${evF >= 0 ? '+' : ''}${(evF * 100).toFixed(1)}¢ | Underdog EV: ${evU >= 0 ? '+' : ''}${(evU * 100).toFixed(1)}¢ per $1`}
-                        >
-                          <span className={styles.cellValue}>
-                            {n > 0
-                              ? `${evF >= 0 ? '+' : ''}${(evF * 100).toFixed(0)}¢`
-                              : '—'}
-                          </span>
-                          <span className={styles.cellSubValue}>
-                            {n > 0
-                              ? `U: ${evU >= 0 ? '+' : ''}${(evU * 100).toFixed(0)}¢`
-                              : ''}
-                          </span>
-                          <span className={styles.cellSample}>
-                            {n > 0 ? `n=${n}` : ''}
-                          </span>
-                        </td>
-                      );
+                      // Tab 4: EV / Trade PnL Simulation
+                      if (activeTab === 'ev') {
+                        const pnl = calculateTradePnl(
+                          n,
+                          cell?.favoriteWins ?? 0,
+                          cell?.reversals ?? 0,
+                          cell?.evFavorite ?? 0,
+                          cell?.evUnderdog ?? 0,
+                          cell?.avgFavoriteOdds ?? 0,
+                          simStake,
+                          cell?.avgFavAmountOut,
+                          cell?.avgUndAmountOut
+                        );
+
+                        const primaryEv = simSide === 'underdog' ? (cell?.evUnderdog ?? 0) : (cell?.evFavorite ?? 0);
+                        const cellBg = getEVColor(primaryEv, n);
+
+                        let mainText = '—';
+                        let subText = '';
+
+                        if (pnl) {
+                          if (simSide === 'both') {
+                            if (simViewMode === 'total') {
+                              mainText = formatUsd(pnl.favNetPnl);
+                              subText = `U: ${formatUsd(pnl.undNetPnl)}`;
+                            } else {
+                              mainText = `${formatUsd(pnl.favPnlPerTrade)} (${pnl.favRoi >= 0 ? '+' : ''}${pnl.favRoi.toFixed(0)}%)`;
+                              subText = `U: ${formatUsd(pnl.undPnlPerTrade)} (${pnl.undRoi >= 0 ? '+' : ''}${pnl.undRoi.toFixed(0)}%)`;
+                            }
+                          } else if (simSide === 'favorite') {
+                            if (simViewMode === 'total') {
+                              mainText = formatUsd(pnl.favNetPnl);
+                              subText = `+${formatUsd(pnl.favTotalWon, false)} | -${formatUsd(pnl.favTotalLost, false)}`;
+                            } else {
+                              mainText = `${formatUsd(pnl.favPnlPerTrade)}/lệnh`;
+                              subText = `ROI: ${pnl.favRoi >= 0 ? '+' : ''}${pnl.favRoi.toFixed(1)}%`;
+                            }
+                          } else {
+                            if (simViewMode === 'total') {
+                              mainText = formatUsd(pnl.undNetPnl);
+                              subText = `+${formatUsd(pnl.undTotalWon, false)} | -${formatUsd(pnl.undTotalLost, false)}`;
+                            } else {
+                              mainText = `${formatUsd(pnl.undPnlPerTrade)}/lệnh`;
+                              subText = `ROI: ${pnl.undRoi >= 0 ? '+' : ''}${pnl.undRoi.toFixed(1)}%`;
+                            }
+                          }
+                        }
+
+                        const cellTooltip = pnl
+                          ? `[Odds ${ob}% • ${mb} | ${n} kỳ]
+Mức cược mô phỏng: $${simStake}/kỳ (Tổng vốn đã cược: $${(n * simStake).toLocaleString()})
+
+🔹 CƯỢC FAVORITE (Kèo trên — Odds TB: ${pnl.avgFavOddsPct.toFixed(1)}%):
+• Tỷ lệ ăn thưởng (Multiplier): ${pnl.favMultiplier.toFixed(2)}x
+• Mỗi ván thắng NHẬN VỀ: $${pnl.favReturnPerWin.toFixed(2)} (Gốc $${simStake} + Lãi ròng +$${pnl.favProfitPerWin.toFixed(2)})
+• Kết quả ${n} kỳ: Thắng ${pnl.favWins} ván (Được: +$${pnl.favTotalWon.toFixed(1)}) | Thua ${pnl.favLosses} ván (Mất: -$${pnl.favTotalLost.toFixed(1)})
+➜ TỔNG LÃI/LỖ: ${formatUsd(pnl.favNetPnl)} (TB: ${formatUsd(pnl.favPnlPerTrade)}/lệnh | ROI: ${pnl.favRoi >= 0 ? '+' : ''}${pnl.favRoi.toFixed(1)}%)
+
+🔸 CƯỢC UNDERDOG (Kèo dưới — Odds TB: ${pnl.avgUndOddsPct.toFixed(1)}%):
+• Tỷ lệ ăn thưởng (Multiplier): ${pnl.undMultiplier.toFixed(2)}x
+• Mỗi ván thắng NHẬN VỀ: $${pnl.undReturnPerWin.toFixed(2)} (Gốc $${simStake} + Lãi ròng +$${pnl.undProfitPerWin.toFixed(2)})
+• Kết quả ${n} kỳ: Thắng ${pnl.undWins} ván (Được: +$${pnl.undTotalWon.toFixed(1)}) | Thua ${pnl.undLosses} ván (Mất: -$${pnl.undTotalLost.toFixed(1)})
+➜ TỔNG LÃI/LỖ: ${formatUsd(pnl.undNetPnl)} (TB: ${formatUsd(pnl.undPnlPerTrade)}/lệnh | ROI: ${pnl.undRoi >= 0 ? '+' : ''}${pnl.undRoi.toFixed(1)}%)`
+                          : 'Chưa có dữ liệu';
+
+                        return (
+                          <td
+                            key={mb}
+                            className={styles.dataCell}
+                            style={{ backgroundColor: cellBg }}
+                            title={cellTooltip}
+                          >
+                            <span className={styles.cellValue}>
+                              {mainText}
+                            </span>
+                            {subText && (
+                              <span className={styles.cellSubValue}>
+                                {subText}
+                              </span>
+                            )}
+                            <span className={styles.cellSample}>
+                              {n > 0 ? `n=${n}` : ''}
+                            </span>
+                          </td>
+                        );
+                      }
                     })}
 
                     {/* Summary Cell for the whole Odds Row */}
@@ -828,27 +1123,90 @@ export default function StatsPage() {
                       </td>
                     )}
 
-                    {activeTab === 'ev' && (
-                      <td
-                        className={styles.summaryCell}
-                        style={{ backgroundColor: getEVColor(rowSummary?.evFavorite ?? 0, rowN) }}
-                        title={`Tổng mức ${ob}%: EV Favorite ${(rowSummary?.evFavorite ?? 0) >= 0 ? '+' : ''}${(((rowSummary?.evFavorite ?? 0) * 100)).toFixed(1)}¢ | EV Underdog ${(rowSummary?.evUnderdog ?? 0) >= 0 ? '+' : ''}${(((rowSummary?.evUnderdog ?? 0) * 100)).toFixed(1)}¢`}
-                      >
-                        <span className={styles.cellValue}>
-                          {rowN > 0
-                            ? `${(rowSummary?.evFavorite ?? 0) >= 0 ? '+' : ''}${((rowSummary?.evFavorite ?? 0) * 100).toFixed(0)}¢`
-                            : '—'}
-                        </span>
-                        <span className={styles.cellSubValue}>
-                          {rowN > 0
-                            ? `U: ${(rowSummary?.evUnderdog ?? 0) >= 0 ? '+' : ''}${((rowSummary?.evUnderdog ?? 0) * 100).toFixed(0)}¢`
-                            : ''}
-                        </span>
-                        <span className={styles.cellSample}>
-                          {rowN > 0 ? `n=${rowN}` : ''}
-                        </span>
-                      </td>
-                    )}
+                    {activeTab === 'ev' && (() => {
+                      const pnl = calculateTradePnl(
+                        rowN,
+                        rowSummary?.favoriteWins ?? 0,
+                        rowSummary?.reversals ?? 0,
+                        rowSummary?.evFavorite ?? 0,
+                        rowSummary?.evUnderdog ?? 0,
+                        rowSummary?.avgFavoriteOdds ?? 0,
+                        simStake,
+                        rowSummary?.avgFavAmountOut,
+                        rowSummary?.avgUndAmountOut
+                      );
+
+                      const primaryEv = simSide === 'underdog' ? (rowSummary?.evUnderdog ?? 0) : (rowSummary?.evFavorite ?? 0);
+                      const cellBg = getEVColor(primaryEv, rowN);
+
+                      let mainText = '—';
+                      let subText = '';
+
+                      if (pnl) {
+                        if (simSide === 'both') {
+                          if (simViewMode === 'total') {
+                            mainText = formatUsd(pnl.favNetPnl);
+                            subText = `U: ${formatUsd(pnl.undNetPnl)}`;
+                          } else {
+                            mainText = `${formatUsd(pnl.favPnlPerTrade)} (${pnl.favRoi >= 0 ? '+' : ''}${pnl.favRoi.toFixed(0)}%)`;
+                            subText = `U: ${formatUsd(pnl.undPnlPerTrade)} (${pnl.undRoi >= 0 ? '+' : ''}${pnl.undRoi.toFixed(0)}%)`;
+                          }
+                        } else if (simSide === 'favorite') {
+                          if (simViewMode === 'total') {
+                            mainText = formatUsd(pnl.favNetPnl);
+                            subText = `+${formatUsd(pnl.favTotalWon, false)} | -${formatUsd(pnl.favTotalLost, false)}`;
+                          } else {
+                            mainText = `${formatUsd(pnl.favPnlPerTrade)}/lệnh`;
+                            subText = `ROI: ${pnl.favRoi >= 0 ? '+' : ''}${pnl.favRoi.toFixed(1)}%`;
+                          }
+                        } else {
+                          if (simViewMode === 'total') {
+                            mainText = formatUsd(pnl.undNetPnl);
+                            subText = `+${formatUsd(pnl.undTotalWon, false)} | -${formatUsd(pnl.undTotalLost, false)}`;
+                          } else {
+                            mainText = `${formatUsd(pnl.undPnlPerTrade)}/lệnh`;
+                            subText = `ROI: ${pnl.undRoi >= 0 ? '+' : ''}${pnl.undRoi.toFixed(1)}%`;
+                          }
+                        }
+                      }
+
+                      const summaryTooltip = pnl
+                        ? `[Tổng mức ${ob}% | ${rowN} kỳ]
+Mức cược mô phỏng: $${simStake}/kỳ (Tổng vốn đã cược: $${(rowN * simStake).toLocaleString()})
+
+🔹 CƯỢC FAVORITE (Kèo trên — Odds TB: ${pnl.avgFavOddsPct.toFixed(1)}%):
+• Tỷ lệ ăn thưởng (Multiplier): ${pnl.favMultiplier.toFixed(2)}x
+• Mỗi ván thắng NHẬN VỀ: $${pnl.favReturnPerWin.toFixed(2)} (Gốc $${simStake} + Lãi ròng +$${pnl.favProfitPerWin.toFixed(2)})
+• Kết quả ${rowN} kỳ: Thắng ${pnl.favWins} ván (Được: +$${pnl.favTotalWon.toFixed(1)}) | Thua ${pnl.favLosses} ván (Mất: -$${pnl.favTotalLost.toFixed(1)})
+➜ TỔNG LÃI/LỖ: ${formatUsd(pnl.favNetPnl)} (TB: ${formatUsd(pnl.favPnlPerTrade)}/lệnh | ROI: ${pnl.favRoi >= 0 ? '+' : ''}${pnl.favRoi.toFixed(1)}%)
+
+🔸 CƯỢC UNDERDOG (Kèo dưới — Odds TB: ${pnl.avgUndOddsPct.toFixed(1)}%):
+• Tỷ lệ ăn thưởng (Multiplier): ${pnl.undMultiplier.toFixed(2)}x
+• Mỗi ván thắng NHẬN VỀ: $${pnl.undReturnPerWin.toFixed(2)} (Gốc $${simStake} + Lãi ròng +$${pnl.undProfitPerWin.toFixed(2)})
+• Kết quả ${rowN} kỳ: Thắng ${pnl.undWins} ván (Được: +$${pnl.undTotalWon.toFixed(1)}) | Thua ${pnl.undLosses} ván (Mất: -$${pnl.undTotalLost.toFixed(1)})
+➜ TỔNG LÃI/LỖ: ${formatUsd(pnl.undNetPnl)} (TB: ${formatUsd(pnl.undPnlPerTrade)}/lệnh | ROI: ${pnl.undRoi >= 0 ? '+' : ''}${pnl.undRoi.toFixed(1)}%)`
+                        : 'Chưa có dữ liệu';
+
+                      return (
+                        <td
+                          className={styles.summaryCell}
+                          style={{ backgroundColor: cellBg }}
+                          title={summaryTooltip}
+                        >
+                          <span className={styles.cellValue}>
+                            {mainText}
+                          </span>
+                          {subText && (
+                            <span className={styles.cellSubValue}>
+                              {subText}
+                            </span>
+                          )}
+                          <span className={styles.cellSample}>
+                            {rowN > 0 ? `n=${rowN}` : ''}
+                          </span>
+                        </td>
+                      );
+                    })()}
                   </tr>
                 );
               })}
@@ -917,7 +1275,7 @@ export default function StatsPage() {
             )}
             {activeTab === 'ev' && (
               <span className={styles.legendNote}>
-                🟢 EV dương = có lợi nhuận kỳ vọng | 🔴 EV âm = bất lợi | U = EV khi mua Underdog
+                🟢 Xanh = Trade thật có LÃI RÒNG (+$$) | 🔴 Đỏ = Trade thật bị THUA LỖ (-$$) | U = Cửa Underdog | Rê chuột vào từng ô để xem số tiền ĐƯỢC và MẤT cụ thể
               </span>
             )}
           </div>

@@ -43,7 +43,7 @@ async function postBinanceApi(endpoint: string, bodyData: any) {
 }
 
 // BƯỚC 1: Lấy báo giá
-async function getPredictionQuote(walletAddress: string, tokenId: string, side: string, amountIn: string) {
+export async function getPredictionQuote(walletAddress: string, tokenId: string, side: string, amountIn: string) {
   const bodyData: any = {
     walletAddress,
     tokenId,

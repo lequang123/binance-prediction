@@ -131,6 +131,27 @@
   box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
 }
 
+.clearBtn {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+
+.clearBtn:hover {
+  background: rgba(239, 68, 68, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.25);
+}
+
 .backupNotice {
   padding: 10px 14px;
   border-radius: 8px;
@@ -825,5 +846,96 @@
 .pageInfo {
   font-size: 13px;
   color: #9aa0a6;
+}
+
+/* ── Trade Simulation Toolbar ── */
+.simToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  background: rgba(30, 30, 50, 0.7);
+  border: 1px solid rgba(138, 180, 248, 0.25);
+  border-radius: 12px;
+  padding: 14px 18px;
+  margin-bottom: 16px;
+}
+
+.simGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.simLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: #9aa0a6;
+  white-space: nowrap;
+}
+
+.simBtnGroup {
+  display: flex;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.simPillBtn {
+  background: transparent;
+  border: none;
+  color: #9aa0a6;
+  padding: 5px 11px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.simPillBtn:hover {
+  color: #e8eaed;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.simPillActive {
+  color: #fff;
+  background: #3b82f6;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
+}
+
+.simInput {
+  width: 65px;
+  padding: 5px 8px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.simInput:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.simHint {
+  width: 100%;
+  font-size: 12px;
+  color: #8ab4f8;
+  padding-top: 6px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.08);
+  line-height: 1.5;
+}
+
+.textGreen {
+  color: #86efac;
+}
+
+.textRed {
+  color: #fca5a5;
 }
 

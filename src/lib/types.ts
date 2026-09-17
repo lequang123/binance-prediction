@@ -226,6 +226,8 @@ export interface RoundOddsBucketEntry {
   favoriteSide: 'Up' | 'Down';
   favoriteOdds: number;     // actual odds at first touch
   ts: number;               // timestamp of first touch
+  favAmountOut?: number;    // Real quote amountOut per $1 from Binance API
+  undAmountOut?: number;    // Real quote amountOut for underdog per $1
 }
 
 /** Aggregated win rate for a specific odds × time bucket */
@@ -238,6 +240,8 @@ export interface OddsBucketWinRate {
   reversals: number;
   reversalRate: number;
   avgFavoriteOdds: number;
+  avgFavAmountOut?: number;  // Báo giá thực tế trung bình từ API get-quote
+  avgUndAmountOut?: number;  // Báo giá thực tế trung bình cho Underdog
   evFavorite: number;       // Expected Value buying favorite
   evUnderdog: number;       // Expected Value buying underdog
   maxConsecutiveLosses: number; // Chuỗi thua liên tục tối đa
@@ -253,6 +257,8 @@ export interface OddsRowSummary {
   reversals: number;
   reversalRate: number;
   avgFavoriteOdds: number;
+  avgFavAmountOut?: number;
+  avgUndAmountOut?: number;
   evFavorite: number;
   evUnderdog: number;
   maxConsecutiveLosses: number;

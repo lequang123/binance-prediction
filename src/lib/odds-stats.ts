@@ -53,6 +53,8 @@ interface BucketRoundItem {
   favoriteOdds: number;
   winner: 'Up' | 'Down';
   isLoss: boolean;
+  favAmountOut?: number;
+  undAmountOut?: number;
 }
 
 /**
@@ -164,6 +166,8 @@ export function computeOddsStats(
       favoriteOdds: entry.favoriteOdds,
       winner,
       isLoss,
+      favAmountOut: entry.favAmountOut,
+      undAmountOut: entry.undAmountOut,
     };
 
     // 1. Add to cell
@@ -231,18 +235,15 @@ export function computeOddsStats(
       const totalFavoriteOdds = items.reduce((sum, i) => sum + i.favoriteOdds, 0);
       const avgFavoriteOdds = totalRounds > 0 ? totalFavoriteOdds / totalRounds : 0;
 
-      const evFavorite =
-        avgFavoriteOdds > 0
-          ? favoriteWinRate * (1 / avgFavoriteOdds - 1) * (1 - feeRate) -
-            (1 - favoriteWinRate) * 1
-          : 0;
+      // Binance get-quote: lấy amountOut thực tế từ API get-quote thời gian thực (hoặc fallback công thức nếu chưa có quote)
+      const favAmountOutItems = items.map((i) => i.favAmountOut ?? (i.favoriteOdds > 0 ? (1 - feeRate) / i.favoriteOdds : 0));
+      const avgFavAmountOut = totalRounds > 0 ? favAmountOutItems.reduce((a, b) => a + b, 0) / totalRounds : 0;
 
-      const underdogOdds = 1 - avgFavoriteOdds;
-      const evUnderdog =
-        underdogOdds > 0
-          ? reversalRate * (1 / underdogOdds - 1) * (1 - feeRate) -
-            (1 - reversalRate) * 1
-          : 0;
+      const undAmountOutItems = items.map((i) => i.undAmountOut ?? (1 - i.favoriteOdds > 0 ? (1 - feeRate) / (1 - i.favoriteOdds) : 0));
+      const avgUndAmountOut = totalRounds > 0 ? undAmountOutItems.reduce((a, b) => a + b, 0) / totalRounds : 0;
+
+      const evFavorite = avgFavAmountOut > 0 ? favoriteWinRate * avgFavAmountOut - 1 : 0;
+      const evUnderdog = avgUndAmountOut > 0 ? reversalRate * avgUndAmountOut - 1 : 0;
 
       const { maxConsecutiveLosses, currentLossStreak } = calculateLossStreaks(items);
 
@@ -255,6 +256,8 @@ export function computeOddsStats(
         reversals,
         reversalRate,
         avgFavoriteOdds,
+        avgFavAmountOut,
+        avgUndAmountOut,
         evFavorite,
         evUnderdog,
         maxConsecutiveLosses,
@@ -278,18 +281,14 @@ export function computeOddsStats(
     const totalFavoriteOdds = items.reduce((sum, i) => sum + i.favoriteOdds, 0);
     const avgFavoriteOdds = totalRounds > 0 ? totalFavoriteOdds / totalRounds : 0;
 
-    const evFavorite =
-      avgFavoriteOdds > 0
-        ? favoriteWinRate * (1 / avgFavoriteOdds - 1) * (1 - feeRate) -
-          (1 - favoriteWinRate) * 1
-        : 0;
+    const favAmountOutItems = items.map((i) => i.favAmountOut ?? (i.favoriteOdds > 0 ? (1 - feeRate) / i.favoriteOdds : 0));
+    const avgFavAmountOut = totalRounds > 0 ? favAmountOutItems.reduce((a, b) => a + b, 0) / totalRounds : 0;
 
-    const underdogOdds = 1 - avgFavoriteOdds;
-    const evUnderdog =
-      underdogOdds > 0
-        ? reversalRate * (1 / underdogOdds - 1) * (1 - feeRate) -
-          (1 - reversalRate) * 1
-        : 0;
+    const undAmountOutItems = items.map((i) => i.undAmountOut ?? (1 - i.favoriteOdds > 0 ? (1 - feeRate) / (1 - i.favoriteOdds) : 0));
+    const avgUndAmountOut = totalRounds > 0 ? undAmountOutItems.reduce((a, b) => a + b, 0) / totalRounds : 0;
+
+    const evFavorite = avgFavAmountOut > 0 ? favoriteWinRate * avgFavAmountOut - 1 : 0;
+    const evUnderdog = avgUndAmountOut > 0 ? reversalRate * avgUndAmountOut - 1 : 0;
 
     const { maxConsecutiveLosses, currentLossStreak } = calculateLossStreaks(items);
 
@@ -301,6 +300,8 @@ export function computeOddsStats(
       reversals,
       reversalRate,
       avgFavoriteOdds,
+      avgFavAmountOut,
+      avgUndAmountOut,
       evFavorite,
       evUnderdog,
       maxConsecutiveLosses,

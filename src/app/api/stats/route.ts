@@ -6,6 +6,7 @@ import {
   getResults,
   getBucketEntries,
   syncDataFromDisk,
+  clearAllData,
 } from '@/lib/odds-collector';
 import { computeOddsStats } from '@/lib/odds-stats';
 
@@ -68,9 +69,13 @@ export async function POST(request: Request) {
     case 'status':
       return NextResponse.json(getCollectorStatus());
 
+    case 'clear':
+      clearAllData();
+      return NextResponse.json({ ok: true, message: 'Đã xóa sạch toàn bộ data logs' });
+
     default:
       return NextResponse.json(
-        { ok: false, message: 'Invalid action. Use: start, stop, status' },
+        { ok: false, message: 'Invalid action. Use: start, stop, status, clear' },
         { status: 400 }
       );
   }
