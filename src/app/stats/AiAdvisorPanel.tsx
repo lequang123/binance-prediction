@@ -63,8 +63,23 @@ export default function AiAdvisorPanel({
   const [apiKey, setApiKey] = useState('');
   const [showKeyInput, setShowKeyInput] = useState(false);
   const [selectedModel, setSelectedModel] = useState('gemini-3.6-flash');
+  const [hasServerKey, setHasServerKey] = useState<boolean>(false);
+  const [serverKeyPrefix, setServerKeyPrefix] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Check if server (Railway or .env.local) has GEMINI_API_KEY configured
+  useEffect(() => {
+    fetch('/api/ai-advisor')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.hasServerKey) {
+          setHasServerKey(true);
+          setServerKeyPrefix(d.keyPrefix);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Load saved API key & model from localStorage
   useEffect(() => {
@@ -246,12 +261,63 @@ export default function AiAdvisorPanel({
         </div>
 
         <div className={styles.aiHeaderRight}>
+          {hasServerKey ? (
+            <span
+              style={{
+                fontSize: '11.5px',
+                padding: '4px 8px',
+                borderRadius: '5px',
+                background: 'rgba(34, 197, 94, 0.15)',
+                color: '#86efac',
+                border: '1px solid rgba(34, 197, 94, 0.3)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+              title={`Server đã nhận key: ${serverKeyPrefix || ''}`}
+            >
+              🟢 Server Key ({serverKeyPrefix || 'OK'})
+            </span>
+          ) : apiKey ? (
+            <span
+              style={{
+                fontSize: '11.5px',
+                padding: '4px 8px',
+                borderRadius: '5px',
+                background: 'rgba(59, 130, 246, 0.15)',
+                color: '#93c5fd',
+                border: '1px solid rgba(59, 130, 246, 0.3)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+            >
+              🔵 Browser Key
+            </span>
+          ) : (
+            <span
+              style={{
+                fontSize: '11.5px',
+                padding: '4px 8px',
+                borderRadius: '5px',
+                background: 'rgba(239, 68, 68, 0.15)',
+                color: '#fca5a5',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+            >
+              ⚪ Chưa có Key
+            </span>
+          )}
+
           <button
             className={styles.aiSettingBtn}
             onClick={() => setShowKeyInput(!showKeyInput)}
             title="Cài đặt API Key & Model"
           >
-            ⚙️ {apiKey ? 'Đổi API Key' : '🔑 Nhập API Key'}
+            ⚙️ {apiKey ? 'Đổi Key cá nhân' : '🔑 Nhập Key'}
           </button>
           <button
             className={styles.aiClearBtn}

@@ -18,6 +18,29 @@ interface ChatMessage {
   content: string;
 }
 
+function hasKey(k?: string): boolean {
+  return !!(k && k.length > 0);
+}
+
+export async function GET() {
+  const envKey = process.env.GEMINI_API_KEY?.trim()?.replace(/^["']|["']$/g, '') || '';
+  const hasServerKey = envKey.length > 0;
+  const model = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
+
+  return NextResponse.json(
+    {
+      hasServerKey,
+      model,
+      keyPrefix: hasServerKey ? `${envKey.slice(0, 6)}...` : null,
+    },
+    {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+      },
+    }
+  );
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -26,15 +49,21 @@ export async function POST(request: Request) {
     const sessionParam = (body.session || 'all') as TradingSession;
     const requestedModel = body.model?.trim();
 
-    // 1. Resolve API Key
-    const apiKey = process.env.GEMINI_API_KEY || clientApiKey;
+    // 1. Resolve API Key (sanitize quotes and whitespace)
+    const envKey = process.env.GEMINI_API_KEY?.trim()?.replace(/^["']|["']$/g, '') || '';
+    const apiKey = envKey || clientApiKey;
+
+    console.log(
+      `[AI ADVISOR] Key check: envKey=${hasKey(envKey)} (len=${envKey.length}), clientKey=${hasKey(clientApiKey)}`
+    );
+
     if (!apiKey) {
       return NextResponse.json(
         {
           ok: false,
           error: 'MISSING_API_KEY',
           message:
-            'Chưa có Gemini API Key. Vui lòng nhập API Key ở ô phía trên hoặc cấu hình GEMINI_API_KEY trong file .env.local',
+            'Chưa có Gemini API Key. Vui lòng kiểm tra lại biến GEMINI_API_KEY trên Railway Variables (và đảm bảo đã Redeploy) hoặc dán trực tiếp vào nút "🔑 Nhập API Key" trên màn hình.',
         },
         { status: 400 }
       );
