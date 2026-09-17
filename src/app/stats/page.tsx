@@ -6,6 +6,7 @@ import type {
   OddsBucketWinRate,
   TradingSession,
 } from '@/lib/types';
+import AiAdvisorPanel from './AiAdvisorPanel';
 import styles from './stats.module.css';
 
 interface CollectorStatus {
@@ -232,7 +233,7 @@ export default function StatsPage() {
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState(false);
   const [selectedSession, setSelectedSession] = useState<TradingSession>('all');
-  const [activeTab, setActiveTab] = useState<'winrate' | 'reversal' | 'ev' | 'streak' | 'losses'>('winrate');
+  const [activeTab, setActiveTab] = useState<'winrate' | 'reversal' | 'ev' | 'streak' | 'losses' | 'ai'>('winrate');
   const [simStake, setSimStake] = useState<number>(10);
   const [simViewMode, setSimViewMode] = useState<'total' | 'per_trade'>('total');
   const [simSide, setSimSide] = useState<'both' | 'favorite' | 'underdog'>('both');
@@ -581,10 +582,22 @@ export default function StatsPage() {
         >
           🔍 Chi tiết ca thua & Giá lệch
         </button>
+        <button
+          className={`${styles.tab} ${activeTab === 'ai' ? styles.tabActive : ''}`}
+          onClick={() => setActiveTab('ai')}
+        >
+          🤖 AI Chiến Lược (Gemini)
+        </button>
       </div>
 
       {/* Main Content Area */}
-      {activeTab === 'losses' ? (
+      {activeTab === 'ai' ? (
+        <AiAdvisorPanel
+          selectedSession={selectedSession}
+          resolvedRounds={data?.stats.resolvedRounds ?? 0}
+          totalRounds={data?.stats.totalRounds ?? 0}
+        />
+      ) : activeTab === 'losses' ? (
         <div className={styles.lossReportContainer}>
           {/* Summary Cards */}
           <div className={styles.lossSummaryGrid}>
