@@ -7,6 +7,9 @@ import * as path from 'path';
 import type { OddsSnapshot, RoundResult, RoundOddsBucketEntry } from './types';
 import { tickMultiBots, resolveMultiBots } from './bot-engine';
 import { getPredictionQuote, WALLET_ADDRESS } from './trade-api';
+import { predictionWs } from './prediction-ws';
+
+let latestEventDetail: any = null;
 
 const EVENT_SLUG = 'btc-up-or-down-5m';
 const POLL_INTERVAL_MS = 300;
@@ -278,6 +281,8 @@ async function pollOnce(): Promise<void> {
       return;
     }
 
+    latestEventDetail = detail;
+
     const now = Date.now();
     const timeRemaining = Math.max(0, Math.floor((detail.endDate - now) / 1000));
     const minuteBucket = getMinuteBucket(timeRemaining);
@@ -295,7 +300,10 @@ async function pollOnce(): Promise<void> {
       // 2. Giữ lại tối đa 5 kỳ gần nhất trong file snapshot và RAM để trace
       pruneOldSnapshotsLog(detail.marketTopicId);
 
-      // // 3. 🎁 Tự động Redeem All các vị thế thắng khi sang Kỳ mới
+      // 3. Chuyển topic WebSocket Orderbook sang kỳ mới
+      predictionWs.setMarketId(detail.marketTopicId);
+
+      // // 4. 🎁 Tự động Redeem All các vị thế thắng khi sang Kỳ mới
       // import('./trade-api').then(({ redeemAllWinningPositions }) => {
       //   redeemAllWinningPositions().catch((err) =>
       //     console.error('[AUTO REDEEM ERROR]:', err?.message || err)
@@ -305,6 +313,7 @@ async function pollOnce(): Promise<void> {
 
     if (state.currentMarketTopicId === null) {
       state.roundCount++;
+      predictionWs.setMarketId(detail.marketTopicId);
     }
     state.currentMarketTopicId = detail.marketTopicId;
 
@@ -401,6 +410,47 @@ async function resolveRound(marketTopicId: number): Promise<void> {
   console.warn(`[ODDS COLLECTOR] ⚠️ Không lấy được kết quả kỳ ${marketTopicId} sau 5 lần thử`);
 }
 
+// ── Realtime WebSocket Push Handler (< 100ms Event-Driven) ──
+
+let wsSubscribed = false;
+function initWebSocketListener(): void {
+  if (wsSubscribed) return;
+  wsSubscribed = true;
+
+  predictionWs.onOrderbook((update) => {
+    if (!state.isCollecting || !latestEventDetail || state.currentMarketTopicId !== update.marketId) {
+      return;
+    }
+
+    if (update.midPrice !== null && update.midPrice > 0) {
+      const isUpLeading = (latestEventDetail.currentPrice || 0) >= (latestEventDetail.startPrice || 0);
+      const favPrice = update.midPrice;
+      const undPrice = Math.max(0.01, Number((1 - favPrice).toFixed(4)));
+
+      const realUp = isUpLeading ? favPrice : undPrice;
+      const realDn = isUpLeading ? undPrice : favPrice;
+
+      latestEventDetail.upPrice = realUp;
+      latestEventDetail.downPrice = realDn;
+
+      const timeRemaining = Math.max(0, Math.floor((latestEventDetail.endDate - Date.now()) / 1000));
+      const fastSnapshot: OddsSnapshot = {
+        ts: update.updateTimestampMs || Date.now(),
+        mtid: update.marketId,
+        up: realUp,
+        dn: realDn,
+        tr: timeRemaining,
+        mb: getMinuteBucket(timeRemaining),
+      };
+
+      // ⚡ Trigger Bot Evaluation NGAY LẬP TỨC từ luồng WebSocket Push (< 100ms)!
+      tickMultiBots(fastSnapshot, latestEventDetail).catch((e) =>
+        console.error('[BOT RUNNER WS ERROR]:', e)
+      );
+    }
+  });
+}
+
 // ── Public API ──
 
 export function startOddsCollector(): void {
@@ -408,7 +458,9 @@ export function startOddsCollector(): void {
   if (!state.collectingSince) {
     state.collectingSince = Date.now();
   }
-  console.log('[ODDS COLLECTOR] Started — polling every 300ms');
+  console.log('[ODDS COLLECTOR] Started — polling every 300ms + WebSocket push active');
+
+  initWebSocketListener();
 
   if (state.loopRunning) {
     return;

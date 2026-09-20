@@ -16,19 +16,48 @@
       "all"
     ],
     "cooldownRounds": 1,
-    "minTimeRemaining": 60,
+    "minTimeRemaining": 20,
     "maxTimeRemaining": 120,
-    "minPriceBuffer": 20,
+    "minPriceBuffer": 30,
     "maxSlippageBps": 450,
     "createdAt": 1789875319746,
-    "updatedAt": 1789885066650,
+    "updatedAt": 1789895753382,
     "targetOddsBuckets": [
       "85-90",
-      "80-85",
-      "75-80"
+      "90-95"
     ],
     "targetMinutes": [
       "2-1m"
+    ]
+  },
+  {
+    "id": "bot_flat_1_0m",
+    "name": "⚡ Bot Đánh Đều Phút 1-0m (Win 91.4%)",
+    "enabled": false,
+    "mode": "SIMULATOR",
+    "strategy": "MARTINGALE_FAVORITE",
+    "stakeMode": "FLAT",
+    "baseStake": 1,
+    "multiplier": 1,
+    "maxSteps": 1,
+    "maxDailyLoss": 50,
+    "oddsMin": 0.85,
+    "oddsMax": 0.9,
+    "sessions": [
+      "all"
+    ],
+    "cooldownRounds": 1,
+    "minTimeRemaining": 35,
+    "maxTimeRemaining": 60,
+    "minPriceBuffer": 20,
+    "maxSlippageBps": 450,
+    "createdAt": 1789875319746,
+    "updatedAt": 1789875319746,
+    "targetOddsBuckets": [
+      "85-90"
+    ],
+    "targetMinutes": [
+      "1-0m"
     ]
   },
   {

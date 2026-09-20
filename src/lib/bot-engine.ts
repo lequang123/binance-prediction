@@ -46,6 +46,29 @@ export const DEFAULT_PRESET_BOTS: BotConfig[] = [
     updatedAt: Date.now(),
   },
   {
+    id: 'bot_flat_1_0m',
+    name: '⚡ Bot Đánh Đều Phút 1-0m (Win 91.4%)',
+    enabled: false,
+    mode: 'SIMULATOR',
+    strategy: 'MARTINGALE_FAVORITE',
+    stakeMode: 'FLAT',
+    baseStake: 10,
+    multiplier: 1.0,
+    maxSteps: 1,
+    maxDailyLoss: 50,
+    targetOddsBuckets: ['85-90'],
+    oddsMin: 0.85,
+    oddsMax: 0.90,
+    sessions: ['all'],
+    targetMinutes: ['1-0m'],
+    cooldownRounds: 1,
+    minTimeRemaining: 35,
+    maxTimeRemaining: 60,
+    minPriceBuffer: 20,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  },
+  {
     id: 'bot_ladder_1_6_15_40',
     name: '👑 Bot Thần Tốc 1$ - 6$ - 15$ - 40$',
     enabled: false,
@@ -275,6 +298,56 @@ export function readBotTradeLogs(botId?: string, limit: number = 50): BotTradeLo
   }
 }
 
+/**
+ * Tính toán số liệu thống kê độc lập cho từng chế độ (REAL_TRADE vs SIMULATOR)
+ * Không bao giờ bị trộn lẫn giữa cược tiền thật và cược thử nghiệm!
+ */
+export function computeBotModeStats(botId: string, mode: 'REAL_TRADE' | 'SIMULATOR'): {
+  totalTrades: number;
+  winCount: number;
+  lossCount: number;
+  dailyPnl: number;
+  dailyLoss: number;
+} {
+  try {
+    if (!fs.existsSync(LOG_FILE)) {
+      return { totalTrades: 0, winCount: 0, lossCount: 0, dailyPnl: 0, dailyLoss: 0 };
+    }
+    const content = fs.readFileSync(LOG_FILE, 'utf8');
+    const lines = content.split('\n').filter(Boolean);
+    const trades: BotTradeLog[] = [];
+
+    for (const line of lines) {
+      try {
+        const item = JSON.parse(line) as BotTradeLog;
+        if (item.botId === botId && item.mode === mode && item.status !== 'SKIPPED') {
+          trades.push(item);
+        }
+      } catch { }
+    }
+
+    const totalTrades = trades.length;
+    const winCount = trades.filter((t) => t.status === 'WIN').length;
+    const lossCount = trades.filter((t) => t.status === 'LOSS').length;
+    const dailyPnl = Number(
+      trades
+        .filter((t) => t.status === 'WIN' || t.status === 'LOSS')
+        .reduce((sum, t) => sum + (t.pnl || 0), 0)
+        .toFixed(2)
+    );
+    const dailyLoss = Number(
+      trades
+        .filter((t) => t.status === 'LOSS')
+        .reduce((sum, t) => sum + (t.stake || 0), 0)
+        .toFixed(2)
+    );
+
+    return { totalTrades, winCount, lossCount, dailyPnl, dailyLoss };
+  } catch {
+    return { totalTrades: 0, winCount: 0, lossCount: 0, dailyPnl: 0, dailyLoss: 0 };
+  }
+}
+
 // ── Instant Backtest Engine (765 Kỳ Thực Tế) ──
 
 export function runBotBacktest(
@@ -371,7 +444,7 @@ export function runBotBacktest(
       const timeRemaining = e.minuteBucket === '5-4m' ? 270 :
         e.minuteBucket === '4-3m' ? 210 :
           e.minuteBucket === '3-2m' ? 150 :
-            e.minuteBucket === '2-1m' ? 90 : 30;
+            e.minuteBucket === '2-1m' ? 90 : 45;
 
       if (timeRemaining < config.minTimeRemaining) continue;
       if (timeRemaining > config.maxTimeRemaining) continue;
@@ -581,14 +654,14 @@ export function evaluateBotSignal(
   if (!config.sessions.includes('all')) {
     const currentSession = getTradingSession(snapshot.ts);
     if (!config.sessions.includes(currentSession)) {
-      return { shouldTrade: false, reason: `Ngoài phiên hoạt động (${config.sessions.join(', ')})` };
+      return { shouldTrade: false, reason: `Ngoài phiên hoạt động (Hiện tại: ${currentSession} vs cần: ${config.sessions.join(', ')})` };
     }
   }
 
   // 5. Bộ lọc Khung phút vào lệnh
   if (Array.isArray(config.targetMinutes) && config.targetMinutes.length > 0) {
     if (!config.targetMinutes.includes(snapshot.mb as any)) {
-      return { shouldTrade: false, reason: `Ngoài khung phút đã chọn (${config.targetMinutes.join(', ')})` };
+      return { shouldTrade: false, reason: `Ngoài khung phút đã chọn (Hiện tại: ${snapshot.mb || 'N/A'} vs cần: ${config.targetMinutes.join(', ')})` };
     }
   }
 
@@ -606,7 +679,7 @@ export function evaluateBotSignal(
     if (priceDelta < config.minPriceBuffer) {
       return {
         shouldTrade: false,
-        reason: `Đệm giá chưa đủ an toàn ($${priceDelta.toFixed(1)} < $${config.minPriceBuffer})`,
+        reason: `Đệm giá chưa đủ an toàn (Chênh lệch $${priceDelta.toFixed(1)} < $${config.minPriceBuffer})`,
       };
     }
   }
@@ -673,10 +746,27 @@ export function evaluateBotSignal(
     }
   }
 
-  return { shouldTrade: false, reason: 'Chưa đạt điều kiện Odds' };
+  const targetDesc = hasTargetBuckets
+    ? `mốc [${config.targetOddsBuckets!.join(', ')}]`
+    : `${(config.oddsMin * 100).toFixed(0)}-${(config.oddsMax * 100).toFixed(0)}%`;
+  return {
+    shouldTrade: false,
+    reason: `Chưa đạt Odds mục tiêu (${favoriteSide} ${(favoriteOdds * 100).toFixed(1)}% [Mốc ${currentBucket}] vs cần ${targetDesc})`
+  };
 }
 
 // ── Background Runner Orchestrators (Hooked into 1s loop) ──
+
+interface RoundBotEvaluation {
+  mtid: number;
+  reason: string;
+  bestOdds?: number;
+  bestSide?: 'Up' | 'Down';
+  timestamp: number;
+  priority: number;
+}
+
+const roundEvaluations = new Map<string, RoundBotEvaluation>();
 
 /**
  * Quét các bot đang bật mỗi giây trong vòng lặp collector
@@ -782,14 +872,50 @@ export async function tickMultiBots(
           logBotActivity(tradeLog);
           saveBotsState(states);
         } catch (err: any) {
-          console.error(`[MULTI-BOT REAL TRADE ERROR] Bot "${config.name}" lỗi đặt lệnh:`, err.message || err);
+          const errMsg = err?.message || String(err);
+          console.error(`[MULTI-BOT REAL TRADE ERROR] Bot "${config.name}" lỗi đặt lệnh:`, errMsg);
           state.status = 'IDLE';
           state.lastActiveMarketId = null;
           saveBotsState(states);
+
+          // Ghi nhận log BỎ QUA (SKIP/FAIL) khi Binance từ chối hoặc lỗi mạng/slippage
+          tradeLog.status = 'SKIPPED';
+          tradeLog.skipReason = `Binance từ chối: ${errMsg.slice(0, 150)}`;
+          logBotActivity(tradeLog);
         }
       } else {
         console.log(`[MULTI-BOT] 🎯 BOT "${config.name}" (SIMULATOR) CƯỢC ẢO: ${signal.side} $${signal.stake} @ ${(signal.odds * 100).toFixed(1)}% (Lý do: ${signal.reason})`);
         logBotActivity(tradeLog);
+      }
+    } else {
+      // Cập nhật lý do không vào lệnh đại diện nhất trong kỳ này
+      const evalKey = `${config.id}_${snapshot.mtid}`;
+      const favOdds = Math.max(snapshot.up, snapshot.dn);
+      const favSide: 'Up' | 'Down' = snapshot.up >= snapshot.dn ? 'Up' : 'Down';
+
+      let priority = 1;
+      if (signal.reason.includes('Cooldown') || signal.reason.includes('tối đa trong ngày')) {
+        priority = 10;
+      } else if (signal.reason.includes('Odds')) {
+        priority = 8;
+      } else if (signal.reason.includes('Đệm giá')) {
+        priority = 6;
+      } else if (signal.reason.includes('Ngoài khung phút')) {
+        priority = 4;
+      } else if (signal.reason.includes('Ngoài phiên')) {
+        priority = 4;
+      }
+
+      const existing = roundEvaluations.get(evalKey);
+      if (!existing || priority > existing.priority || (priority === existing.priority && favOdds > (existing.bestOdds || 0))) {
+        roundEvaluations.set(evalKey, {
+          mtid: snapshot.mtid,
+          reason: signal.reason,
+          bestOdds: favOdds,
+          bestSide: favSide,
+          timestamp: Date.now(),
+          priority,
+        });
       }
     }
   }
@@ -898,14 +1024,45 @@ export function resolveMultiBots(result: RoundResult): void {
       }
 
       modified = true;
+    } else if (config.enabled && state.lastActiveMarketId !== result.mtid) {
+      // 2. Bot đang BẬT nhưng không cược ở kỳ này -> Ghi nhận log BỎ QUA (SKIP) kèm lý do
+      const evalKey = `${config.id}_${result.mtid}`;
+      const evalData = roundEvaluations.get(evalKey);
+      const skipReason = evalData?.reason || 'Không xuất hiện tín hiệu thỏa mãn điều kiện chiến lược trong kỳ';
+
+      const skipLog: BotTradeLog = {
+        id: `skip_${result.mtid}_${config.id}`,
+        botId: config.id,
+        botName: config.name,
+        mtid: result.mtid,
+        timestamp: evalData?.timestamp || Date.now(),
+        side: evalData?.bestSide || 'Up',
+        odds: evalData?.bestOdds || 0,
+        stake: state.currentStake,
+        step: state.currentStep,
+        mode: config.mode,
+        status: 'SKIPPED',
+        pnl: 0,
+        skipReason,
+      };
+
+      logBotActivity(skipLog);
+      console.log(`[MULTI-BOT] ⏭️ BOT "${config.name}" BỎ QUA Kỳ #${result.mtid}. Lý do: ${skipReason}`);
     } else if (state.status === 'COOLDOWN' && state.cooldownRemaining > 0) {
-      // 2. Nếu bot đang cooldown ở các vòng sau
+      // 3. Nếu bot đang cooldown ở các vòng sau
       state.cooldownRemaining--;
       if (state.cooldownRemaining === 0) {
         state.status = 'IDLE';
         console.log(`[MULTI-BOT] 🔔 BOT "${config.name}" ĐÃ HẾT COOLDOWN. Sẵn sàng vào lệnh tiếp theo!`);
       }
       modified = true;
+    }
+  }
+
+  // Dọn dẹp evaluation cache của các kỳ cũ hơn 5 kỳ
+  for (const [key, val] of roundEvaluations.entries()) {
+    if (val.mtid < result.mtid - 5) {
+      roundEvaluations.delete(key);
     }
   }
 

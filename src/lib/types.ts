@@ -403,11 +403,12 @@ export interface BotTradeLog {
   stake: number;
   step: number;
   mode: 'SIMULATOR' | 'REAL_TRADE';
-  status: 'PENDING' | 'WIN' | 'LOSS';
+  status: 'PENDING' | 'WIN' | 'LOSS' | 'SKIPPED';
   pnl: number;
   orderId?: string;
   shares?: number;
   fillPrice?: number;
+  skipReason?: string;
 }
 
 

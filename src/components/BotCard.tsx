@@ -187,7 +187,9 @@ export default function BotCard({
           </div>
 
           <div>
-            <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>PnL hôm nay</div>
+            <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+              {config.mode === 'REAL_TRADE' ? '🔥 PnL LIVE' : '🟡 PnL SIM'}
+            </div>
             <div style={{
               fontSize: '1.05rem',
               fontWeight: 700,
@@ -198,7 +200,9 @@ export default function BotCard({
           </div>
 
           <div>
-            <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Lệnh đã đánh</div>
+            <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+              Lệnh {config.mode === 'REAL_TRADE' ? 'LIVE' : 'SIM'}
+            </div>
             <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#cbd5e1' }}>
               {state?.totalTrades ?? 0} ({state?.winCount ?? 0}W - {state?.lossCount ?? 0}L)
             </div>

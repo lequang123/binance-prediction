@@ -5,6 +5,7 @@ import {
   loadBotsState,
   saveBotsState,
   readBotTradeLogs,
+  computeBotModeStats,
 } from '@/lib/bot-engine';
 import type { BotConfig, BotRuntimeState } from '@/lib/types';
 
@@ -45,10 +46,22 @@ export async function GET() {
 
     return NextResponse.json({
       ok: true,
-      bots: configs.map((cfg) => ({
-        config: cfg,
-        state: states[cfg.id],
-      })),
+      bots: configs.map((cfg) => {
+        const bState = states[cfg.id];
+        const modeStats = computeBotModeStats(cfg.id, cfg.mode);
+
+        return {
+          config: cfg,
+          state: {
+            ...bState,
+            totalTrades: modeStats.totalTrades,
+            winCount: modeStats.winCount,
+            lossCount: modeStats.lossCount,
+            dailyPnl: modeStats.dailyPnl,
+            dailyLoss: modeStats.dailyLoss,
+          },
+        };
+      }),
       recentLogs: tradeLogs,
     });
   } catch (err: any) {

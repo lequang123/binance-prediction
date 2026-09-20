@@ -29,8 +29,8 @@ ENV HOSTNAME="0.0.0.0"
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Tạo thư mục logs và gán quyền ghi cho user nextjs
-RUN mkdir -p /app/logs && chown -R nextjs:nodejs /app/logs
+# Tạo thư mục logs và gán quyền cho user nextjs
+RUN mkdir -p /app/logs
 
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/package.json ./package.json
@@ -38,6 +38,11 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/src ./src
 COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/.bots_config.json* ./
+COPY --from=builder /app/.bots_state.json* ./
+COPY --from=builder /app/.backend_config.json* ./
+
+RUN chown -R nextjs:nodejs /app
 
 USER nextjs
 

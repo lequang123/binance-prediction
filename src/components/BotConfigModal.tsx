@@ -198,10 +198,14 @@ export default function BotConfigModal({
     triggerBacktest(updated);
   };
 
-  const handleSelectMinutePreset = (presetKey: '2-1m' | '3-2m' | '4-3m' | '5-4m' | '3-1m' | 'all') => {
+  const handleSelectMinutePreset = (presetKey: '1-0m' | '2-1m' | '3-2m' | '4-3m' | '5-4m' | '2-0m' | '3-1m' | 'all') => {
     let updated = { ...config };
 
-    if (presetKey === '2-1m') {
+    if (presetKey === '1-0m') {
+      updated.targetMinutes = ['1-0m'];
+      updated.minTimeRemaining = 35;
+      updated.maxTimeRemaining = 60;
+    } else if (presetKey === '2-1m') {
       updated.targetMinutes = ['2-1m'];
       updated.minTimeRemaining = 60;
       updated.maxTimeRemaining = 120;
@@ -217,6 +221,10 @@ export default function BotConfigModal({
       updated.targetMinutes = ['5-4m'];
       updated.minTimeRemaining = 240;
       updated.maxTimeRemaining = 300;
+    } else if (presetKey === '2-0m') {
+      updated.targetMinutes = ['2-1m', '1-0m'];
+      updated.minTimeRemaining = 35;
+      updated.maxTimeRemaining = 120;
     } else if (presetKey === '3-1m') {
       updated.targetMinutes = ['3-2m', '2-1m'];
       updated.minTimeRemaining = 60;
@@ -247,10 +255,30 @@ export default function BotConfigModal({
     handleChange('sessions', updatedSessions);
   };
 
-  const handleApplyPreset = (presetType: 'FLAT_BET_2_1M' | 'LADDER_1_6_15_40' | 'SAFE_MARTINGALE' | 'UNDERDOG_HUNTER' | 'EV_SNIPER') => {
+  const handleApplyPreset = (presetType: 'FLAT_BET_1_0M' | 'FLAT_BET_2_1M' | 'LADDER_1_6_15_40' | 'SAFE_MARTINGALE' | 'UNDERDOG_HUNTER' | 'EV_SNIPER') => {
     let preset: Partial<BotConfig> = {};
 
-    if (presetType === 'FLAT_BET_2_1M') {
+    if (presetType === 'FLAT_BET_1_0M') {
+      setStakeMode('FLAT');
+      preset = {
+        name: '⚡ Bot Đánh Đều Phút 1-0m (Win 91.4%)',
+        strategy: 'MARTINGALE_FAVORITE',
+        stakeMode: 'FLAT',
+        baseStake: 10,
+        multiplier: 1.0,
+        maxSteps: 1,
+        customLadder: undefined,
+        maxDailyLoss: 50,
+        targetOddsBuckets: ['85-90'],
+        oddsMin: 0.85,
+        oddsMax: 0.90,
+        cooldownRounds: 1,
+        targetMinutes: ['1-0m'],
+        minTimeRemaining: 35,
+        maxTimeRemaining: 60,
+        minPriceBuffer: 20,
+      };
+    } else if (presetType === 'FLAT_BET_2_1M') {
       setStakeMode('FLAT');
       preset = {
         name: '🛡️ Bot Đánh Đều Phút 2-1m (Win 95.0%)',
@@ -435,6 +463,22 @@ export default function BotConfigModal({
               💡 MẪU CẤU HÌNH GỢI Ý (1-CLICK NẠP THÔNG SỐ TỐI ƯU):
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => handleApplyPreset('FLAT_BET_1_0M')}
+                style={{
+                  background: 'rgba(56, 189, 248, 0.2)',
+                  border: '1px solid rgba(56, 189, 248, 0.5)',
+                  color: '#38bdf8',
+                  padding: '6px 12px',
+                  borderRadius: 8,
+                  fontSize: '0.78rem',
+                  cursor: 'pointer',
+                  fontWeight: 700,
+                }}
+              >
+                ⚡ Đánh Đều Phút 1-0m (Win 91%)
+              </button>
               <button
                 type="button"
                 onClick={() => handleApplyPreset('FLAT_BET_2_1M')}
@@ -933,13 +977,15 @@ export default function BotConfigModal({
             </div>
 
             {/* Các nút bấm chọn phút trực quan */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 12 }}>
               {[
+                { key: '1-0m' as const, label: '⚡ Phút 1 - 0m', desc: 'Còn 1:00 -> 0:35 (Phút chót)', active: config.targetMinutes?.length === 1 && config.targetMinutes[0] === '1-0m' },
                 { key: '2-1m' as const, label: '⚡ Phút 2 - 1m', desc: 'Còn 2:00 -> 1:00 (Khuyên dùng)', active: config.targetMinutes?.length === 1 && config.targetMinutes[0] === '2-1m' },
                 { key: '3-2m' as const, label: '⏱️ Phút 3 - 2m', desc: 'Còn 3:00 -> 2:00', active: config.targetMinutes?.length === 1 && config.targetMinutes[0] === '3-2m' },
                 { key: '4-3m' as const, label: '⏱️ Phút 4 - 3m', desc: 'Còn 4:00 -> 3:00', active: config.targetMinutes?.length === 1 && config.targetMinutes[0] === '4-3m' },
                 { key: '5-4m' as const, label: '⚡ Phút 5 - 4m', desc: 'Còn 5:00 -> 4:00 (Phút đầu)', active: config.targetMinutes?.length === 1 && config.targetMinutes[0] === '5-4m' },
-                { key: '3-1m' as const, label: '🎯 Cả Phút 3 - 1m', desc: 'Khoảng 2 phút cuối', active: config.targetMinutes?.includes('3-2m') && config.targetMinutes?.includes('2-1m') && config.targetMinutes.length === 2 },
+                { key: '2-0m' as const, label: '🎯 Cả Phút 2 - 0m', desc: 'Khoảng 2 phút cuối cùng', active: config.targetMinutes?.includes('2-1m') && config.targetMinutes?.includes('1-0m') && config.targetMinutes.length === 2 },
+                { key: '3-1m' as const, label: '🎯 Cả Phút 3 - 1m', desc: 'Khoảng 2 phút áp chót', active: config.targetMinutes?.includes('3-2m') && config.targetMinutes?.includes('2-1m') && config.targetMinutes.length === 2 },
                 { key: 'all' as const, label: '🌐 Tất cả các phút', desc: 'Quét tự do 35s - 240s', active: !config.targetMinutes || config.targetMinutes.length >= 5 },
               ].map((m) => (
                 <button

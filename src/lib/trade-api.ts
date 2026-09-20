@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 
-const API_KEY = 'QmtFpgGiKn5Br1KSSgBDlr2BrWq3dxsXW5xNWHUckgE4NdeiYMBKC79ttYrjHskR';
-const SECRET_KEY = 'nDRAdJFcUaGQ4wFdGpuCHicnGFkmyRsHn4XTmOxkMS6tuIIpnRp79z3Fl6v5sNmW';
+export const API_KEY = 'QmtFpgGiKn5Br1KSSgBDlr2BrWq3dxsXW5xNWHUckgE4NdeiYMBKC79ttYrjHskR';
+export const SECRET_KEY = 'nDRAdJFcUaGQ4wFdGpuCHicnGFkmyRsHn4XTmOxkMS6tuIIpnRp79z3Fl6v5sNmW';
 
 export const WALLET_ADDRESS = '0x7947Eb2E92537f55295119AD833F0064E35C9f42';
 export const WALLET_ID = '267e0168a97846cbaa4044886323d1d7';
