@@ -128,12 +128,12 @@ function calculateTradePnl(
 ): TradePnlResult | null {
   if (totalRounds <= 0) return null;
 
-  const feeRate = 0.02;
+  const feeRate = 0.0;
 
-  // Nếu có amountOut thực tế từ API get-quote thời gian thực thì dùng, nếu chưa thì tính theo chuẩn Binance get-quote
+  // Dùng trực tiếp amountOut thực tế của sàn (không trừ thêm 2%)
   const favAmountOut = (avgFavAmountOut && avgFavAmountOut > 0)
     ? avgFavAmountOut * stake
-    : (avgFavoriteOdds > 0 ? (stake * (1 - feeRate)) / avgFavoriteOdds : 0);
+    : (avgFavoriteOdds > 0 ? stake / avgFavoriteOdds : 0);
 
   const favReturnPerWin = favAmountOut;
   const favProfitPerWin = favAmountOut - stake;
@@ -149,7 +149,7 @@ function calculateTradePnl(
   const underdogOdds = Math.max(0, 1 - avgFavoriteOdds);
   const undAmountOut = (avgUndAmountOut && avgUndAmountOut > 0)
     ? avgUndAmountOut * stake
-    : (underdogOdds > 0 ? (stake * (1 - feeRate)) / underdogOdds : 0);
+    : (underdogOdds > 0 ? stake / underdogOdds : 0);
 
   const undReturnPerWin = undAmountOut;
   const undProfitPerWin = undAmountOut - stake;

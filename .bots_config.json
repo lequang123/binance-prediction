@@ -1,0 +1,84 @@
+[
+  {
+    "id": "bot_flat_2_1m",
+    "name": "🛡️ Bot Đánh Đều Phút 2-1m (Win 95.0%)",
+    "enabled": true,
+    "mode": "REAL_TRADE",
+    "strategy": "MARTINGALE_FAVORITE",
+    "stakeMode": "FLAT",
+    "baseStake": 1,
+    "multiplier": 1,
+    "maxSteps": 1,
+    "maxDailyLoss": 100,
+    "oddsMin": 0.85,
+    "oddsMax": 0.9,
+    "sessions": [
+      "all"
+    ],
+    "cooldownRounds": 1,
+    "minTimeRemaining": 60,
+    "maxTimeRemaining": 120,
+    "minPriceBuffer": 15,
+    "createdAt": 1789875319746,
+    "updatedAt": 1789883160500,
+    "targetOddsBuckets": [
+      "85-90",
+      "80-85"
+    ],
+    "targetMinutes": [
+      "2-1m"
+    ]
+  },
+  {
+    "id": "bot_ladder_1_6_15_40",
+    "name": "👑 Bot Thần Tốc 1$ - 6$ - 15$ - 40$",
+    "enabled": false,
+    "mode": "SIMULATOR",
+    "strategy": "MARTINGALE_FAVORITE",
+    "stakeMode": "CUSTOM_LADDER",
+    "baseStake": 1,
+    "multiplier": 4,
+    "maxSteps": 4,
+    "customLadder": [
+      1,
+      6,
+      15,
+      40
+    ],
+    "maxDailyLoss": 65,
+    "oddsMin": 0.85,
+    "oddsMax": 0.9,
+    "sessions": [
+      "all"
+    ],
+    "cooldownRounds": 2,
+    "minTimeRemaining": 35,
+    "maxTimeRemaining": 240,
+    "minPriceBuffer": 20,
+    "createdAt": 1789875319746,
+    "updatedAt": 1789875319746
+  },
+  {
+    "id": "bot_martingale_85_90",
+    "name": "🎯 Bot Gấp Thếp 85-90% An Toàn (2 Bước)",
+    "enabled": false,
+    "mode": "SIMULATOR",
+    "strategy": "MARTINGALE_FAVORITE",
+    "stakeMode": "MARTINGALE",
+    "baseStake": 10,
+    "multiplier": 4,
+    "maxSteps": 2,
+    "maxDailyLoss": 100,
+    "oddsMin": 0.85,
+    "oddsMax": 0.9,
+    "sessions": [
+      "all"
+    ],
+    "cooldownRounds": 2,
+    "minTimeRemaining": 35,
+    "maxTimeRemaining": 240,
+    "minPriceBuffer": 20,
+    "createdAt": 1789875319746,
+    "updatedAt": 1789875698960
+  }
+]

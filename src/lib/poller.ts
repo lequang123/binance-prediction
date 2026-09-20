@@ -1,5 +1,5 @@
 // ============================================================
-// Server-side Poller — Polls Binance every 200ms in background
+// Server-side Poller — Polls Binance every 300ms in background
 // Singleton: starts on first import, caches latest state
 // ============================================================
 
@@ -9,7 +9,7 @@ import { logTrade, logSnapshot } from './logger';
 
 import type { DashboardData, MarketSnapshot, DetectedTrade } from './types';
 
-const POLL_INTERVAL_MS = 500;
+const POLL_INTERVAL_MS = 300;
 
 /** Cached state */
 let cachedSnapshot: MarketSnapshot | null = null;

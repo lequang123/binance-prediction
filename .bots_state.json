@@ -1,0 +1,60 @@
+{
+  "bot_martingale_85_90": {
+    "botId": "bot_martingale_85_90",
+    "currentStake": 10,
+    "currentStep": 1,
+    "cooldownRemaining": 0,
+    "dailyLoss": 0,
+    "dailyPnl": 0,
+    "totalTrades": 0,
+    "winCount": 0,
+    "lossCount": 0,
+    "lastTradeTimestamp": 0,
+    "lastActiveMarketId": null,
+    "status": "IDLE"
+  },
+  "bot_underdog_hunter": {
+    "botId": "bot_underdog_hunter",
+    "currentStake": 5,
+    "currentStep": 1,
+    "cooldownRemaining": 0,
+    "dailyLoss": 0,
+    "dailyPnl": 0,
+    "totalTrades": 0,
+    "winCount": 0,
+    "lossCount": 0,
+    "lastTradeTimestamp": 0,
+    "lastActiveMarketId": null,
+    "status": "IDLE"
+  },
+  "bot_flat_2_1m": {
+    "botId": "bot_flat_2_1m",
+    "currentStake": 1,
+    "currentStep": 1,
+    "cooldownRemaining": 0,
+    "dailyLoss": 10,
+    "dailyPnl": -1.2151912342031679,
+    "totalTrades": 6,
+    "winCount": 5,
+    "lossCount": 1,
+    "lastTradeTimestamp": 1789882399070,
+    "lastActiveMarketId": 5868058,
+    "status": "IDLE",
+    "lastTradeSide": "Up",
+    "lastTradeOdds": 0.89
+  },
+  "bot_ladder_1_6_15_40": {
+    "botId": "bot_ladder_1_6_15_40",
+    "currentStake": 1,
+    "currentStep": 1,
+    "cooldownRemaining": 0,
+    "dailyLoss": 0,
+    "dailyPnl": 0,
+    "totalTrades": 0,
+    "winCount": 0,
+    "lossCount": 0,
+    "lastTradeTimestamp": 0,
+    "lastActiveMarketId": null,
+    "status": "IDLE"
+  }
+}

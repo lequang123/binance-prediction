@@ -217,7 +217,7 @@ export function computeOddsStats(
     }
   }
 
-  const feeRate = 0.02;
+  const feeRate = 0.0;
 
   // Build cell table
   const winRateTable: OddsBucketWinRate[] = [];
@@ -235,11 +235,11 @@ export function computeOddsStats(
       const totalFavoriteOdds = items.reduce((sum, i) => sum + i.favoriteOdds, 0);
       const avgFavoriteOdds = totalRounds > 0 ? totalFavoriteOdds / totalRounds : 0;
 
-      // Binance get-quote: lấy amountOut thực tế từ API get-quote thời gian thực (hoặc fallback công thức nếu chưa có quote)
-      const favAmountOutItems = items.map((i) => i.favAmountOut ?? (i.favoriteOdds > 0 ? (1 - feeRate) / i.favoriteOdds : 0));
+      // Số tiền trong log là thực tế của sàn, không trừ thêm 2%
+      const favAmountOutItems = items.map((i) => i.favAmountOut ?? (i.favoriteOdds > 0 ? 1 / i.favoriteOdds : 0));
       const avgFavAmountOut = totalRounds > 0 ? favAmountOutItems.reduce((a, b) => a + b, 0) / totalRounds : 0;
 
-      const undAmountOutItems = items.map((i) => i.undAmountOut ?? (1 - i.favoriteOdds > 0 ? (1 - feeRate) / (1 - i.favoriteOdds) : 0));
+      const undAmountOutItems = items.map((i) => i.undAmountOut ?? (1 - i.favoriteOdds > 0 ? 1 / (1 - i.favoriteOdds) : 0));
       const avgUndAmountOut = totalRounds > 0 ? undAmountOutItems.reduce((a, b) => a + b, 0) / totalRounds : 0;
 
       const evFavorite = avgFavAmountOut > 0 ? favoriteWinRate * avgFavAmountOut - 1 : 0;
@@ -281,10 +281,10 @@ export function computeOddsStats(
     const totalFavoriteOdds = items.reduce((sum, i) => sum + i.favoriteOdds, 0);
     const avgFavoriteOdds = totalRounds > 0 ? totalFavoriteOdds / totalRounds : 0;
 
-    const favAmountOutItems = items.map((i) => i.favAmountOut ?? (i.favoriteOdds > 0 ? (1 - feeRate) / i.favoriteOdds : 0));
+    const favAmountOutItems = items.map((i) => i.favAmountOut ?? (i.favoriteOdds > 0 ? 1 / i.favoriteOdds : 0));
     const avgFavAmountOut = totalRounds > 0 ? favAmountOutItems.reduce((a, b) => a + b, 0) / totalRounds : 0;
 
-    const undAmountOutItems = items.map((i) => i.undAmountOut ?? (1 - i.favoriteOdds > 0 ? (1 - feeRate) / (1 - i.favoriteOdds) : 0));
+    const undAmountOutItems = items.map((i) => i.undAmountOut ?? (1 - i.favoriteOdds > 0 ? 1 / (1 - i.favoriteOdds) : 0));
     const avgUndAmountOut = totalRounds > 0 ? undAmountOutItems.reduce((a, b) => a + b, 0) / totalRounds : 0;
 
     const evFavorite = avgFavAmountOut > 0 ? favoriteWinRate * avgFavAmountOut - 1 : 0;

@@ -150,3 +150,80 @@ export async function testSellAll(tokenId: string) {
     console.error(`[TEST SELL ALL] ❌ Lỗi khi bán:`, error.message);
   }
 }
+
+// ====================================================
+// BƯỚC 3: BATCH REDEEM ALL CÁC VỊ THẾ THẮNG
+// ====================================================
+
+/**
+ * Gửi lệnh Batch Redeem cho danh sách tokenIds
+ */
+export async function batchRedeemTokens(tokenIds: string[]): Promise<any> {
+  if (!tokenIds || tokenIds.length === 0) {
+    return { success: false, message: 'Không có token nào cần redeem' };
+  }
+
+  try {
+    const timestamp = Date.now();
+    let bodyString = `chainId=56&timestamp=${timestamp}`;
+    for (const id of tokenIds) {
+      bodyString += `&tokenIds=${encodeURIComponent(id)}`;
+    }
+
+    const signature = crypto
+      .createHmac('sha256', SECRET_KEY)
+      .update(bodyString)
+      .digest('hex');
+
+    const fullUrl = `https://api.binance.com/sapi/v1/w3w/wallet/prediction/batch-redeem?${bodyString}&signature=${signature}`;
+
+    const response = await fetch(fullUrl, {
+      method: 'POST',
+      headers: {
+        'X-MBX-APIKEY': API_KEY,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+    });
+
+    const data = await response.json();
+    return data;
+  } catch (err: any) {
+    console.error(`[BATCH REDEEM ERROR]:`, err.message || err);
+    throw err;
+  }
+}
+
+/**
+ * Tự động tìm tất cả các vị thế đã thắng chưa redeem của ví và gọi batch-redeem
+ */
+export async function redeemAllWinningPositions(): Promise<{ redeemedCount: number; tokenIds: string[]; result?: any }> {
+  try {
+    console.log(`[REDEEM ALL] 🔍 Đang quét các vị thế đã thắng chưa Redeem của ví ${WALLET_ADDRESS}...`);
+
+    // 1. Lấy danh sách closed positions của ví Web3
+    const { fetchPositions } = await import('./binance');
+    const { entries } = await fetchPositions('closed', 1, 30);
+
+    // 2. Lọc các vị thế THẮNG (outcomeWinner === true) và chưa redeem (claimedShares === null hoặc 0)
+    const unclaimed = entries.filter(
+      (p) => p.outcomeWinner === true && (!p.claimedShares || p.claimedShares === 0)
+    );
+
+    // Lấy danh sách tokenIds duy nhất
+    const tokenIds = [...new Set(unclaimed.map((p) => p.tokenId).filter(Boolean))];
+
+    if (tokenIds.length === 0) {
+      console.log(`[REDEEM ALL] ✨ Không có vị thế thắng nào đang chờ Redeem.`);
+      return { redeemedCount: 0, tokenIds: [] };
+    }
+
+    console.log(`[REDEEM ALL] 🎁 Tìm thấy ${tokenIds.length} vị thế thắng chưa nhận thưởng. Đang gọi batch-redeem...`);
+    const res = await batchRedeemTokens(tokenIds);
+    console.log(`[REDEEM ALL] ✅ Kết quả Binance Redeem:`, res);
+
+    return { redeemedCount: tokenIds.length, tokenIds, result: res };
+  } catch (err: any) {
+    console.error(`[REDEEM ALL ERROR]:`, err.message || err);
+    return { redeemedCount: 0, tokenIds: [] };
+  }
+}

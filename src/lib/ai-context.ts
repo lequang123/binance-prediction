@@ -16,8 +16,8 @@ Vai trò của bạn:
 
 Quy tắc cơ bản của thị trường:
 - Mỗi kỳ diễn ra trong 5 phút. BTC chốt giá cao hơn giá mở = Up thắng, ngược lại = Down thắng.
-- Sàn Binance trừ 2% phí vào vốn (Trading Fee 200 bps). Khi cược $1:
-  - amountOut = 0.98 / Odds.
+- Số tiền trong log là thực tế sàn ghi nhận. Khi cược $1:
+  - amountOut = 1 / Odds.
   - Khi thắng: nhận về amountOut (lãi ròng = amountOut - 1).
   - Khi thua: mất toàn bộ $1 cược.
 - Cửa Thuận (Favorite): Cửa có odds > 50%.

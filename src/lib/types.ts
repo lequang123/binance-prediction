@@ -306,4 +306,105 @@ export interface OddsStatsResult {
   lossSummary: LossAnalysisSummary;
 }
 
+// ============================================================
+// Multi-Bot Studio Types
+// ============================================================
+
+export type BotStrategy = 'MARTINGALE_FAVORITE' | 'UNDERDOG_HUNTER' | 'EV_SNIPER';
+
+export interface BotConfig {
+  id: string;
+  name: string;
+  enabled: boolean;
+  mode: 'SIMULATOR' | 'REAL_TRADE';
+  strategy: BotStrategy;
+
+  // Quản lý vốn
+  stakeMode?: 'FLAT' | 'MARTINGALE' | 'CUSTOM_LADDER'; // Chế độ: Đi đều tay, Gấp thếp, hoặc Chuỗi tùy chỉnh
+  baseStake: number;               // Số tiền cược cơ bản (ví dụ: 10 USDT)
+  multiplier: number;              // Hệ số nhân gấp thếp (ví dụ: 4.0x)
+  maxSteps: number;                // Số bước gấp thếp tối đa (mặc định: 2)
+  maxDailyLoss: number;            // Giới hạn lỗ tối đa trong ngày (ví dụ: 50 USDT)
+  customLadder?: number[];         // Chuỗi tiền cược bậc thang tùy chỉnh (ví dụ: [1, 6, 15, 40])
+
+  // Điều kiện vào lệnh
+  oddsMin: number;                 // Odds tối thiểu (ví dụ: 0.85)
+  oddsMax: number;                 // Odds tối đa (ví dụ: 0.90)
+  targetOddsBuckets?: string[];    // Danh sách các mốc odds được chọn (ví dụ: ['80-85', '85-90', '90-95'])
+  sessions: TradingSession[];      // ['all'] hoặc ['asia', 'us', ...]
+  targetMinutes?: ('5-4m' | '4-3m' | '3-2m' | '2-1m' | '1-0m')[]; // Chọn phút vào lệnh (ví dụ: ['2-1m'])
+
+  // Bộ lọc tránh thua lỗ
+  cooldownRounds: number;          // Số vòng nghỉ sau khi thua (mặc định: 2)
+  minTimeRemaining: number;        // Chặn giây cuối (mặc định: 35s)
+  maxTimeRemaining: number;        // Chặn vào quá sớm (mặc định: 240s)
+  minPriceBuffer: number;          // Đệm giá an toàn tối thiểu (mặc định: $20)
+
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface BotRuntimeState {
+  botId: string;
+  currentStake: number;
+  currentStep: number;
+  cooldownRemaining: number;
+  dailyLoss: number;
+  dailyPnl: number;
+  totalTrades: number;
+  winCount: number;
+  lossCount: number;
+  lastTradeTimestamp: number;
+  lastActiveMarketId: number | null;
+  status: 'IDLE' | 'IN_TRADE' | 'COOLDOWN' | 'STOPPED_MAX_LOSS';
+  lastTradeSide?: 'Up' | 'Down';
+  lastTradeOdds?: number;
+  lastDayUTC?: number;
+}
+
+export interface BacktestTradeItem {
+  roundId: number;
+  timeStr: string;
+  minuteBucket: string;
+  step: number;
+  stake: number;
+  side: 'Up' | 'Down';
+  odds: number;
+  winner: 'Up' | 'Down';
+  isWin: boolean;
+  pnl: number;
+  balanceAfter: number;
+  actionNote: string;
+}
+
+export interface BacktestResult {
+  totalRoundsEvaluated: number;
+  tradesCount: number;
+  wins: number;
+  losses: number;
+  winRate: number;
+  netPnl: number;
+  maxDrawdown: number;
+  cutLossCount: number;
+  rating: 'EXCELLENT' | 'BALANCED' | 'HIGH_RISK';
+  trades?: BacktestTradeItem[];
+}
+
+export interface BotTradeLog {
+  id: string;
+  botId: string;
+  botName: string;
+  mtid: number;
+  timestamp: number;
+  side: 'Up' | 'Down';
+  odds: number;
+  stake: number;
+  step: number;
+  mode: 'SIMULATOR' | 'REAL_TRADE';
+  status: 'PENDING' | 'WIN' | 'LOSS';
+  pnl: number;
+  orderId?: string;
+}
+
+
 

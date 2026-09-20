@@ -1,5 +1,5 @@
 // ============================================================
-// Odds Collector — Poll real-time odds every 1 second
+// Odds Collector — Poll real-time odds every 300ms
 // ============================================================
 
 import * as fs from 'fs';
@@ -7,7 +7,7 @@ import * as path from 'path';
 import type { OddsSnapshot, RoundResult, RoundOddsBucketEntry } from './types';
 
 const EVENT_SLUG = 'btc-up-or-down-5m';
-const POLL_INTERVAL_MS = 1000;
+const POLL_INTERVAL_MS = 300;
 const MAX_SNAPSHOT_ROUNDS = 5;
 
 const EVENT_DETAIL_URL =
@@ -292,6 +292,13 @@ async function pollOnce(): Promise<void> {
 
       // 2. Giữ lại tối đa 5 kỳ gần nhất trong file snapshot và RAM để trace
       pruneOldSnapshotsLog(detail.marketTopicId);
+
+      // 3. 🎁 Tự động Redeem All các vị thế thắng khi sang Kỳ mới
+      import('./trade-api').then(({ redeemAllWinningPositions }) => {
+        redeemAllWinningPositions().catch((err) =>
+          console.error('[AUTO REDEEM ERROR]:', err?.message || err)
+        );
+      });
     }
 
     if (state.currentMarketTopicId === null) {
@@ -315,6 +322,11 @@ async function pollOnce(): Promise<void> {
     // Write snapshot to file (chỉ chứa snapshots của các kỳ gần nhất)
     const logDir = ensureLogDir();
     appendToFile(path.join(logDir, 'odds_snapshots.jsonl'), snapshot);
+
+    // 🤖 ĐIỀU PHỐI MULTI-BOT RUNNER (Tự động cược Simulator hoặc Real Trade theo config)
+    import('./bot-engine').then(({ tickMultiBots }) => {
+      tickMultiBots(snapshot, detail).catch((e) => console.error('[BOT RUNNER ERROR]:', e));
+    });
 
     // First-touch dedup: record bucket entry only once per round
     const favoriteOdds = Math.max(detail.upPrice, detail.downPrice);
@@ -376,6 +388,12 @@ async function resolveRound(marketTopicId: number): Promise<void> {
       console.log(
         `[ODDS COLLECTOR] ✅ Kỳ ${marketTopicId} resolved: Winner=${result.winner} | BTC: ${result.startPrice} → ${result.endPrice} | Volume: $${result.volume.toFixed(0)}`
       );
+
+      // 🤖 BÁO KẾT QUẢ CHO MULTI-BOTS (Để cập nhật Win/Loss, Cooldown, Reset/Gấp thếp)
+      import('./bot-engine').then(({ resolveMultiBots }) => {
+        resolveMultiBots(result);
+      });
+
       return;
     }
   }
@@ -390,7 +408,7 @@ export function startOddsCollector(): void {
   if (!state.collectingSince) {
     state.collectingSince = Date.now();
   }
-  console.log('[ODDS COLLECTOR] Started — polling every 1s');
+  console.log('[ODDS COLLECTOR] Started — polling every 300ms');
 
   if (state.loopRunning) {
     return;

@@ -148,6 +148,26 @@ export default function Header({ snapshot, isLive, lastUpdate, realTrade = false
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <Link
+            href="/bots"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.2) 100%)',
+              border: '1px solid rgba(59, 130, 246, 0.4)',
+              color: '#93c5fd',
+              padding: '6px 12px',
+              borderRadius: 20,
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              textDecoration: 'none',
+              boxShadow: '0 2px 8px rgba(59, 130, 246, 0.2)',
+            }}
+          >
+            <span>🤖 Multi-Bot Studio</span>
+          </Link>
+
+          <Link
             href="/stats"
             style={{
               display: 'flex',
