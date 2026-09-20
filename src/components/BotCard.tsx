@@ -100,6 +100,18 @@ export default function BotCard({
               {config.name}
             </h3>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {config.strategy === 'TRAP_TRADERS' && (
+                <span style={{
+                  background: 'rgba(244, 63, 94, 0.15)',
+                  color: '#fb7185',
+                  padding: '2px 8px',
+                  borderRadius: 4,
+                  fontSize: '0.7rem',
+                  fontWeight: 700,
+                }}>
+                  🪤 Bẫy Trader (Trap)
+                </span>
+              )}
               <span style={{
                 background: config.stakeMode === 'FLAT' ? 'rgba(56, 189, 248, 0.15)' : config.stakeMode === 'CUSTOM_LADDER' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.08)',
                 color: config.stakeMode === 'FLAT' ? '#38bdf8' : config.stakeMode === 'CUSTOM_LADDER' ? '#34d399' : '#cbd5e1',
@@ -219,9 +231,23 @@ export default function BotCard({
 
         {/* Settings Summary */}
         <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: 16, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <span>🛡️ Đệm ${config.minPriceBuffer}</span>
-          <span>•</span>
-          <span>🛑 Max Loss ${config.maxDailyLoss}/ngày</span>
+          {config.strategy === 'TRAP_TRADERS' ? (
+            <>
+              <span style={{ color: '#fda4af', fontWeight: 600 }}>🪤 Đỉnh ≥{Math.round((config.trapPeakOddsMin ?? 0.9) * 100)}%</span>
+              <span>•</span>
+              <span style={{ color: '#fda4af', fontWeight: 600 }}>📉 Đảo ≥${config.trapMinPriceReversal ?? 15}</span>
+              <span>•</span>
+              <span style={{ color: '#fda4af', fontWeight: 600 }}>Trần ≤{Math.round((config.trapMaxOdds ?? 0.85) * 100)}%</span>
+              <span>•</span>
+              <span>🛑 Max Loss ${config.maxDailyLoss}/ngày</span>
+            </>
+          ) : (
+            <>
+              <span>🛡️ Đệm ${config.minPriceBuffer}</span>
+              <span>•</span>
+              <span>🛑 Max Loss ${config.maxDailyLoss}/ngày</span>
+            </>
+          )}
         </div>
       </div>
 

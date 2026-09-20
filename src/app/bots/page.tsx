@@ -80,11 +80,13 @@ export default function BotsStudioPage() {
   const logs = data?.recentLogs || [];
   const [activeMode, setActiveMode] = useState<'REAL_TRADE' | 'SIMULATOR' | 'ALL'>('REAL_TRADE');
 
-  const realLogs = logs.filter((l) => l.mode === 'REAL_TRADE');
-  const simLogs = logs.filter((l) => l.mode === 'SIMULATOR');
+  // Chỉ hiển thị các lượt THỰC SỰ VÀO LỆNH (WIN, LOSS, PENDING, hoặc lệnh Live bị sàn hủy). Bỏ qua các kỳ không cược
+  const validTradeLogs = logs.filter((l) => l.status !== 'SKIPPED' || Boolean(l.orderId));
+  const realLogs = validTradeLogs.filter((l) => l.mode === 'REAL_TRADE');
+  const simLogs = validTradeLogs.filter((l) => l.mode === 'SIMULATOR');
 
   const currentDisplayLogs = activeMode === 'ALL'
-    ? logs
+    ? validTradeLogs
     : activeMode === 'REAL_TRADE'
       ? realLogs
       : simLogs;
@@ -749,28 +751,17 @@ export default function BotsStudioPage() {
                     )}
                     <td style={{ padding: '10px 12px' }}>
                       {log.status === 'SKIPPED' ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                          <span style={{
-                            color: '#cbd5e1',
-                            background: 'rgba(100, 116, 139, 0.25)',
-                            border: '1px solid rgba(148, 163, 184, 0.25)',
-                            padding: '2px 8px',
-                            borderRadius: 4,
-                            fontWeight: 700,
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 4,
-                            width: 'fit-content',
-                            fontSize: '0.78rem',
-                          }}>
-                            ⏭️ Bỏ qua (Skip)
-                          </span>
-                          {log.skipReason && (
-                            <span style={{ fontSize: '0.75rem', color: '#94a3b8', lineHeight: 1.3 }}>
-                              Lý do: <strong style={{ color: '#e2e8f0' }}>{log.skipReason}</strong>
-                            </span>
-                          )}
-                        </div>
+                        <span style={{
+                          color: '#fb7185',
+                          background: 'rgba(244, 63, 94, 0.15)',
+                          border: '1px solid rgba(244, 63, 94, 0.3)',
+                          padding: '2px 8px',
+                          borderRadius: 4,
+                          fontWeight: 700,
+                          fontSize: '0.78rem',
+                        }}>
+                          ❌ Không khớp (Trượt giá - 0$)
+                        </span>
                       ) : (
                         <span style={{
                           color: log.status === 'WIN' ? '#4ade80' : log.status === 'LOSS' ? '#f87171' : '#facc15',

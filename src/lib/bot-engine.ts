@@ -21,8 +21,35 @@ const CONFIG_FILE = path.join(process.cwd(), '.bots_config.json');
 const STATE_FILE = path.join(process.cwd(), '.bots_state.json');
 const LOG_FILE = path.join(process.cwd(), 'logs', 'bots_activity.jsonl');
 
+// Bộ nhớ đệm lưu đỉnh Odds của từng kỳ để phục vụ chiến thuật Trap Traders
+export const roundPeakOddsMap = new Map<number, { peakOdds: number; peakSide: 'Up' | 'Down'; peakTr: number }>();
+
 // ── Default Preset Bots ──
 export const DEFAULT_PRESET_BOTS: BotConfig[] = [
+  {
+    id: 'bot_trap_traders',
+    name: '🪤 Bot Săn Bẫy Trader (Trap 90% -> Đảo $15 Phút Chót)',
+    enabled: false,
+    mode: 'SIMULATOR',
+    strategy: 'TRAP_TRADERS',
+    stakeMode: 'FLAT',
+    baseStake: 10,
+    multiplier: 1.0,
+    maxSteps: 1,
+    maxDailyLoss: 50,
+    oddsMin: 0.50,
+    oddsMax: 0.85,
+    trapPeakOddsMin: 0.90,
+    trapMinPriceReversal: 15,
+    trapMaxOdds: 0.85,
+    sessions: ['all'],
+    targetMinutes: ['1-0m'],
+    minTimeRemaining: 15,
+    maxTimeRemaining: 60,
+    minPriceBuffer: 15,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  },
   {
     id: 'bot_flat_2_1m',
     name: '🛡️ Bot Đánh Đều Phút 2-1m (Win 94.8%)',
@@ -417,92 +444,133 @@ export function runBotBacktest(
     const roundEntries = entriesByRound.get(round.mtid) || [];
     if (roundEntries.length === 0) continue;
 
-    // Tìm entry đầu tiên thỏa mãn điều kiện lọc
+    // ═══════════════════════════════════════════════════════════════════
+    // TÁCH BIỆT 100% LOGIC BACKTEST GIỮA 2 CHIẾN THUẬT BOT:
+    // ═══════════════════════════════════════════════════════════════════
     let matchedEntry: RoundOddsBucketEntry | null = null;
     let targetSide: 'Up' | 'Down' = 'Up';
     let targetOdds = 0;
 
-    for (const e of roundEntries) {
-      // Bộ lọc theo phút nếu có chọn
-      if (Array.isArray(config.targetMinutes) && config.targetMinutes.length > 0) {
-        const allowedMinutes = new Set(config.targetMinutes);
-        if (config.minTimeRemaining !== undefined && config.maxTimeRemaining !== undefined) {
-          if (config.maxTimeRemaining > 240 && config.minTimeRemaining < 300) allowedMinutes.add('5-4m');
-          if (config.maxTimeRemaining > 180 && config.minTimeRemaining < 240) allowedMinutes.add('4-3m');
-          if (config.maxTimeRemaining > 120 && config.minTimeRemaining < 180) allowedMinutes.add('3-2m');
-          if (config.maxTimeRemaining > 60 && config.minTimeRemaining < 120) allowedMinutes.add('2-1m');
-          if (config.minTimeRemaining < 60) allowedMinutes.add('1-0m');
+    if (config.strategy === 'TRAP_TRADERS') {
+      // 🪤 BOT LOẠI 2: BACKTEST RIÊNG CHO SĂN BẪY TRADER (TRAP TRADERS)
+      // Điều kiện:
+      // 1. Phút 5-2m (tr > 60s): Có bên đạt đỉnh Odds >= trapPeakOddsMin (80%, 85%, 90%)
+      // 2. Phút 1-0m (tr <= 60s): Giá nến đảo chiều vượt StartPrice >= trapMinPriceReversal ($15)
+      // 3. Odds cửa mới <= trapMaxOdds (85%)
+      const earlyEntries = roundEntries.filter((re) => re.minuteBucket !== '1-0m');
+      let maxEarly = 0;
+      let peakSide: 'Up' | 'Down' = 'Up';
+      for (const ee of earlyEntries) {
+        if (ee.favoriteOdds > maxEarly) {
+          maxEarly = ee.favoriteOdds;
+          peakSide = ee.favoriteSide;
         }
-        if (!allowedMinutes.has(e.minuteBucket as any)) continue;
       }
 
-      // Bộ lọc thời gian còn lại
-      const timeRemaining = e.minuteBucket === '5-4m' ? 270 :
-        e.minuteBucket === '4-3m' ? 210 :
-          e.minuteBucket === '3-2m' ? 150 :
-            e.minuteBucket === '2-1m' ? 90 : 45;
+      const minPeak = config.trapPeakOddsMin || 0.90;
+      if (maxEarly >= minPeak) {
+        const newSide: 'Up' | 'Down' = peakSide === 'Up' ? 'Down' : 'Up';
+        const priceDelta = (round.endPrice || 0) - (round.startPrice || 0);
+        const newSideDelta = newSide === 'Up' ? priceDelta : -priceDelta;
+        const minDelta = config.trapMinPriceReversal || 15;
 
-      if (timeRemaining < config.minTimeRemaining) continue;
-      if (timeRemaining > config.maxTimeRemaining) continue;
+        if (newSideDelta >= minDelta) {
+          const lateEntry = roundEntries.find((re) => re.minuteBucket === '1-0m' && re.favoriteSide === newSide);
+          const odds = lateEntry ? lateEntry.favoriteOdds : 0.72;
+          const maxOdds = config.trapMaxOdds || 0.85;
 
-      const favPct = Math.round(e.favoriteOdds * 100);
-      let bucket = e.oddsBucket;
-      if (!bucket) {
-        if (favPct >= 95) bucket = '95+';
-        else if (favPct >= 90) bucket = '90-95';
-        else if (favPct >= 85) bucket = '85-90';
-        else if (favPct >= 80) bucket = '80-85';
-        else if (favPct >= 75) bucket = '75-80';
-        else if (favPct >= 70) bucket = '70-75';
-        else if (favPct >= 65) bucket = '65-70';
-        else if (favPct >= 60) bucket = '60-65';
-        else if (favPct >= 55) bucket = '55-60';
-        else bucket = '50-55';
+          if (odds <= maxOdds) {
+            matchedEntry = lateEntry || earlyEntries[0];
+            targetSide = newSide;
+            targetOdds = odds;
+          }
+        }
+      }
+    } else {
+      // 🛡️ BOT LOẠI 1: BACKTEST CHO BOT THÔNG THƯỜNG (CỬA THUẬN FAVORITE / UNDERDOG)
+      for (const e of roundEntries) {
+        // 1. Lọc phút
+        if (Array.isArray(config.targetMinutes) && config.targetMinutes.length > 0) {
+          const allowedMinutes = new Set(config.targetMinutes);
+          if (config.minTimeRemaining !== undefined && config.maxTimeRemaining !== undefined) {
+            if (config.maxTimeRemaining > 240 && config.minTimeRemaining < 300) allowedMinutes.add('5-4m');
+            if (config.maxTimeRemaining > 180 && config.minTimeRemaining < 240) allowedMinutes.add('4-3m');
+            if (config.maxTimeRemaining > 120 && config.minTimeRemaining < 180) allowedMinutes.add('3-2m');
+            if (config.maxTimeRemaining > 60 && config.minTimeRemaining < 120) allowedMinutes.add('2-1m');
+            if (config.minTimeRemaining < 60) allowedMinutes.add('1-0m');
+          }
+          if (!allowedMinutes.has(e.minuteBucket as any)) continue;
+        }
+
+        // 2. Lọc thời gian giây
+        const timeRemaining = e.minuteBucket === '5-4m' ? 270 :
+          e.minuteBucket === '4-3m' ? 210 :
+            e.minuteBucket === '3-2m' ? 150 :
+              e.minuteBucket === '2-1m' ? 90 : 45;
+
+        if (timeRemaining < config.minTimeRemaining) continue;
+        if (timeRemaining > config.maxTimeRemaining) continue;
+
+        // 3. Mốc Odds
+        const favPct = Math.round(e.favoriteOdds * 100);
+        let bucket = e.oddsBucket;
+        if (!bucket) {
+          if (favPct >= 95) bucket = '95+';
+          else if (favPct >= 90) bucket = '90-95';
+          else if (favPct >= 85) bucket = '85-90';
+          else if (favPct >= 80) bucket = '80-85';
+          else if (favPct >= 75) bucket = '75-80';
+          else if (favPct >= 70) bucket = '70-75';
+          else if (favPct >= 65) bucket = '65-70';
+          else if (favPct >= 60) bucket = '60-65';
+          else if (favPct >= 55) bucket = '55-60';
+          else bucket = '50-55';
+        }
+
+        const hasTargetBuckets = Array.isArray(config.targetOddsBuckets) && config.targetOddsBuckets.length > 0;
+        const bucketMatch = hasTargetBuckets ? config.targetOddsBuckets!.includes(bucket) : true;
+
+        if (config.strategy === 'MARTINGALE_FAVORITE') {
+          const match = hasTargetBuckets ? bucketMatch : (e.favoriteOdds >= config.oddsMin && e.favoriteOdds <= config.oddsMax);
+          if (match) {
+            matchedEntry = e;
+            targetSide = e.favoriteSide;
+            targetOdds = e.favoriteOdds;
+            break;
+          }
+        } else if (config.strategy === 'UNDERDOG_HUNTER') {
+          const underdogOdds = Math.max(0, 1 - e.favoriteOdds);
+          const match = hasTargetBuckets ? bucketMatch : (
+            config.oddsMin >= 0.50
+              ? (e.favoriteOdds >= config.oddsMin && e.favoriteOdds <= config.oddsMax)
+              : (underdogOdds >= config.oddsMin && underdogOdds <= config.oddsMax)
+          );
+          if (match) {
+            matchedEntry = e;
+            targetSide = e.favoriteSide === 'Up' ? 'Down' : 'Up';
+            targetOdds = underdogOdds;
+            break;
+          }
+        } else if (config.strategy === 'EV_SNIPER') {
+          if (e.favoriteOdds >= 0.70 && e.favoriteOdds <= 0.85 && e.minuteBucket === '5-4m') {
+            matchedEntry = e;
+            targetSide = e.favoriteSide;
+            targetOdds = e.favoriteOdds;
+            break;
+          }
+        }
       }
 
-      const hasTargetBuckets = Array.isArray(config.targetOddsBuckets) && config.targetOddsBuckets.length > 0;
-      const bucketMatch = hasTargetBuckets ? config.targetOddsBuckets!.includes(bucket) : true;
-
-      if (config.strategy === 'MARTINGALE_FAVORITE') {
-        const match = hasTargetBuckets ? bucketMatch : (e.favoriteOdds >= config.oddsMin && e.favoriteOdds <= config.oddsMax);
-        if (match) {
-          matchedEntry = e;
-          targetSide = e.favoriteSide;
-          targetOdds = e.favoriteOdds;
-          break;
-        }
-      } else if (config.strategy === 'UNDERDOG_HUNTER') {
-        const underdogOdds = Math.max(0, 1 - e.favoriteOdds);
-        const match = hasTargetBuckets ? bucketMatch : (
-          config.oddsMin >= 0.50
-            ? (e.favoriteOdds >= config.oddsMin && e.favoriteOdds <= config.oddsMax)
-            : (underdogOdds >= config.oddsMin && underdogOdds <= config.oddsMax)
-        );
-        if (match) {
-          matchedEntry = e;
-          targetSide = e.favoriteSide === 'Up' ? 'Down' : 'Up';
-          targetOdds = underdogOdds;
-          break;
-        }
-      } else {
-        // EV_SNIPER: Cửa trên có odds >= 0.70 ở phút 5-4m
-        if (e.favoriteOdds >= 0.70 && e.favoriteOdds <= 0.85 && e.minuteBucket === '5-4m') {
-          matchedEntry = e;
-          targetSide = e.favoriteSide;
-          targetOdds = e.favoriteOdds;
-          break;
+      // 4. Lọc đệm giá an toàn
+      if (matchedEntry && config.minPriceBuffer > 0) {
+        const priceDiff = Math.abs((round.endPrice || 0) - (round.startPrice || 0));
+        if (priceDiff < config.minPriceBuffer) {
+          matchedEntry = null;
         }
       }
     }
 
     if (!matchedEntry || targetOdds <= 0) continue;
-
-    // Bộ lọc đệm giá an toàn: Nếu biên độ giá phiên quá hẹp (< minPriceBuffer), bỏ qua không vào lệnh (tránh nến Doji / quét 2 đầu sát nút)
-    const priceDiff = Math.abs((round.endPrice || 0) - (round.startPrice || 0));
-    if (config.minPriceBuffer > 0 && priceDiff < config.minPriceBuffer) {
-      continue;
-    }
-
     const isWin = targetSide === round.winner;
 
     // Tính kết quả lệnh (không trừ 2% vì số tiền trong log đã là thực tế)
@@ -611,7 +679,18 @@ export interface EvaluatedSignal {
   reason: string;
 }
 
-export function evaluateBotSignal(
+/**
+ * 🪤 BỘ LỌC ĐẶC QUYỀN CHO BOT SĂN BẪY TRADER (TRAP TRADERS)
+ * Hoàn toàn độc lập với Bot Cược Thuận / Gấp thếp thông thường.
+ *
+ * Điều kiện vào lệnh:
+ * 1. Khung thời gian: Phải là 1 phút cuối cùng (tr <= 60s và tr >= 15s tránh râu giật sát nút)
+ * 2. Đỉnh Odds ban đầu (phút 5-2m): Phải từng có 1 bên đạt đỉnh >= trapPeakOddsMin (80%, 85%, 90%)
+ * 3. Xác nhận đảo chiều (Confirmed Reversal): Nến BTC đã cắt qua StartPrice >= trapMinPriceReversal ($15) về phía cửa mới
+ * 4. Odds cửa mới <= trapMaxOdds (85%) để Payout luôn đạt >= x1.35 - x1.45
+ * 5. Cược ngay vào CỬA MỚI đã quay xe!
+ */
+function evaluateTrapTradersSignal(
   config: BotConfig,
   state: BotRuntimeState,
   snapshot: OddsSnapshot,
@@ -622,30 +701,94 @@ export function evaluateBotSignal(
     downPrice: number;
   }
 ): EvaluatedSignal {
-  if (!config.enabled) {
-    return { shouldTrade: false, reason: 'Bot đang tắt' };
+  // 1. Chỉ rà soát ở 1 phút cuối cùng (tr <= 60s)
+  const maxTr = config.maxTimeRemaining ?? 60;
+  if (snapshot.tr > maxTr) {
+    return {
+      shouldTrade: false,
+      reason: `[TRAP] Chờ 1 phút cuối để quét bẫy đảo chiều (Hiện tại còn ${snapshot.tr}s > ${maxTr}s)`,
+    };
   }
 
-  // 1. Kiểm tra nếu đã vào lệnh cho vòng này rồi
-  if (state.lastActiveMarketId === snapshot.mtid) {
-    return { shouldTrade: false, reason: 'Đã vào lệnh cho vòng cược này' };
+  // 2. Chặn giây cuối nếu quá sát nút (mặc định 15s)
+  const minTr = config.minTimeRemaining ?? 15;
+  if (snapshot.tr < minTr) {
+    return {
+      shouldTrade: false,
+      reason: `[TRAP] Thời gian còn lại quá ít (${snapshot.tr}s < ${minTr}s - tránh râu giật sát nút)`,
+    };
   }
 
-
-  // 3. Kiểm tra Giới hạn Max Daily Loss
-  if (config.maxDailyLoss > 0 && state.dailyLoss >= config.maxDailyLoss) {
-    return { shouldTrade: false, reason: `Đã chạm mức lỗ tối đa trong ngày ($${config.maxDailyLoss})` };
+  // 3. Kiểm tra Đỉnh Odds đã từng xảy ra ở phút 5-2m của vòng này
+  const peak = roundPeakOddsMap.get(snapshot.mtid);
+  const minPeak = config.trapPeakOddsMin || 0.90;
+  if (!peak || peak.peakOdds < minPeak) {
+    const curFavOdds = Math.max(snapshot.up, snapshot.dn);
+    return {
+      shouldTrade: false,
+      reason: `[TRAP] Chưa từng có bên nào đạt đỉnh Odds >= ${(minPeak * 100).toFixed(0)}% (Đỉnh cao nhất: ${((peak?.peakOdds || curFavOdds) * 100).toFixed(1)}%)`,
+    };
   }
 
-  // 4. Kiểm tra Phiên giao dịch
-  if (!config.sessions.includes('all')) {
-    const currentSession = getTradingSession(snapshot.ts);
-    if (!config.sessions.includes(currentSession)) {
-      return { shouldTrade: false, reason: `Ngoài phiên hoạt động (Hiện tại: ${currentSession} vs cần: ${config.sessions.join(', ')})` };
-    }
+  // 4. Kiểm tra Giá BTC đã đảo chiều qua StartPrice ít nhất $15 (Không đoán trước)
+  const startPrice = eventDetail.startPrice || 0;
+  const currentPrice = eventDetail.currentPrice || 0;
+  if (startPrice <= 0 || currentPrice <= 0) {
+    return {
+      shouldTrade: false,
+      reason: '[TRAP] Chưa có đủ dữ liệu giá BTC để xác nhận đảo chiều',
+    };
   }
 
-  // 5. Bộ lọc Thời gian còn lại (Chính xác từng giây lẻ theo cấu hình)
+  const priceDelta = currentPrice - startPrice; // >0 là UP, <0 là DOWN
+  const newSide: 'Up' | 'Down' = peak.peakSide === 'Up' ? 'Down' : 'Up';
+  const newSideDelta = newSide === 'Up' ? priceDelta : -priceDelta;
+  const minReversal = config.trapMinPriceReversal ?? 15;
+
+  if (newSideDelta < minReversal) {
+    return {
+      shouldTrade: false,
+      reason: `[TRAP] Chưa đảo chiều đủ $${minReversal} (Cửa mới ${newSide} đang lệch $${newSideDelta.toFixed(1)} so với StartPrice)`,
+    };
+  }
+
+  // 5. Kiểm tra Odds của cửa mới không được vượt trần (đảm bảo Payout tốt)
+  const newSideOdds = newSide === 'Up' ? snapshot.up : snapshot.dn;
+  const maxOdds = config.trapMaxOdds || 0.85;
+  if (newSideOdds > maxOdds) {
+    return {
+      shouldTrade: false,
+      reason: `[TRAP] Odds cửa mới vượt trần ${(newSideOdds * 100).toFixed(1)}% > ${(maxOdds * 100).toFixed(0)}%`,
+    };
+  }
+
+  // THỎA MÃN TOÀN BỘ ĐIỀU KIỆN TRAP -> VÀO LỆNH CỬA MỚI!
+  return {
+    shouldTrade: true,
+    side: newSide,
+    odds: newSideOdds,
+    stake: state.currentStake,
+    step: state.currentStep,
+    reason: `🪤 Bẫy Trader kích hoạt! Đỉnh cũ ${peak.peakSide} ${(peak.peakOdds * 100).toFixed(0)}% -> Đã đảo chiều sang ${newSide} lệch $${newSideDelta.toFixed(1)} (Odds: ${(newSideOdds * 100).toFixed(1)}%)`,
+  };
+}
+
+/**
+ * 🛡️ BỘ LỌC CHO BOT THÔNG THƯỜNG (CỬA THUẬN FAVORITE / CỬA LẬT KÈO / GẤP THẾP)
+ * Chuyên đánh theo xu hướng Odds, mốc phút và đệm giá an toàn.
+ */
+function evaluateStandardBotSignal(
+  config: BotConfig,
+  state: BotRuntimeState,
+  snapshot: OddsSnapshot,
+  eventDetail: {
+    startPrice: number;
+    currentPrice?: number;
+    upPrice: number;
+    downPrice: number;
+  }
+): EvaluatedSignal {
+  // 1. Bộ lọc Thời gian còn lại
   if (config.minTimeRemaining !== undefined && snapshot.tr < config.minTimeRemaining) {
     return { shouldTrade: false, reason: `Thời gian còn lại quá ít (${snapshot.tr}s < ${config.minTimeRemaining}s - tránh râu nến giật)` };
   }
@@ -653,9 +796,8 @@ export function evaluateBotSignal(
     return { shouldTrade: false, reason: `Thời gian còn lại quá sớm (${snapshot.tr}s > ${config.maxTimeRemaining}s - nến chưa có đà)` };
   }
 
-  // 6. Bộ lọc Khung phút vào lệnh
+  // 2. Bộ lọc Khung phút vào lệnh
   if (Array.isArray(config.targetMinutes) && config.targetMinutes.length > 0) {
-    // Tự động mở rộng các phút hợp lệ tương ứng với dải giây [minTimeRemaining, maxTimeRemaining]
     const allowedMinutes = new Set(config.targetMinutes);
     if (config.minTimeRemaining !== undefined && config.maxTimeRemaining !== undefined) {
       if (config.maxTimeRemaining > 240 && config.minTimeRemaining < 300) allowedMinutes.add('5-4m');
@@ -670,7 +812,7 @@ export function evaluateBotSignal(
     }
   }
 
-  // 6. Bộ lọc Đệm giá an toàn
+  // 3. Bộ lọc Đệm giá an toàn (chống nến Doji / quét 2 đầu sát nút)
   if (config.minPriceBuffer > 0 && eventDetail.startPrice > 0 && eventDetail.currentPrice) {
     const priceDelta = Math.abs(eventDetail.currentPrice - eventDetail.startPrice);
     if (priceDelta < config.minPriceBuffer) {
@@ -681,7 +823,7 @@ export function evaluateBotSignal(
     }
   }
 
-  // 7. Xác định Cửa và Mốc Odds
+  // 4. Xác định Cửa và Mốc Odds
   const favoriteOdds = Math.max(snapshot.up, snapshot.dn);
   const favoriteSide: 'Up' | 'Down' = snapshot.up >= snapshot.dn ? 'Up' : 'Down';
   const underdogOdds = Math.min(snapshot.up, snapshot.dn);
@@ -748,22 +890,58 @@ export function evaluateBotSignal(
     : `${(config.oddsMin * 100).toFixed(0)}-${(config.oddsMax * 100).toFixed(0)}%`;
   return {
     shouldTrade: false,
-    reason: `Chưa đạt Odds mục tiêu (${favoriteSide} ${(favoriteOdds * 100).toFixed(1)}% [Mốc ${currentBucket}] vs cần ${targetDesc})`
+    reason: `Chưa đạt Odds mục tiêu (${favoriteSide} ${(favoriteOdds * 100).toFixed(1)}% [Mốc ${currentBucket}] vs cần ${targetDesc})`,
   };
+}
+
+export function evaluateBotSignal(
+  config: BotConfig,
+  state: BotRuntimeState,
+  snapshot: OddsSnapshot,
+  eventDetail: {
+    startPrice: number;
+    currentPrice?: number;
+    upPrice: number;
+    downPrice: number;
+  }
+): EvaluatedSignal {
+  if (!config.enabled) {
+    return { shouldTrade: false, reason: 'Bot đang tắt' };
+  }
+
+  // 1. Kiểm tra nếu đã vào lệnh cho vòng này rồi
+  if (state.lastActiveMarketId === snapshot.mtid) {
+    return { shouldTrade: false, reason: 'Đã vào lệnh cho vòng cược này' };
+  }
+
+  // 2. Kiểm tra Giới hạn Max Daily Loss
+  if (config.maxDailyLoss > 0 && state.dailyLoss >= config.maxDailyLoss) {
+    return { shouldTrade: false, reason: `Đã chạm mức lỗ tối đa trong ngày ($${config.maxDailyLoss})` };
+  }
+
+  // 3. Kiểm tra Phiên giao dịch
+  if (!config.sessions.includes('all')) {
+    const currentSession = getTradingSession(snapshot.ts);
+    if (!config.sessions.includes(currentSession)) {
+      return { shouldTrade: false, reason: `Ngoài phiên hoạt động (Hiện tại: ${currentSession} vs cần: ${config.sessions.join(', ')})` };
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // TÁCH BIỆT HOÀN TOÀN GIỮA 2 LOẠI BOT - KHÔNG DÙNG CHUNG ĐIỀU KIỆN
+  // ═══════════════════════════════════════════════════════════════════
+  if (config.strategy === 'TRAP_TRADERS') {
+    // 🪤 ĐIỀU KIỆN ĐẶC QUYỀN CỦA BOT SĂN BẪY TRADER:
+    return evaluateTrapTradersSignal(config, state, snapshot, eventDetail);
+  } else {
+    // 🛡️ ĐIỀU KIỆN TIÊU CHUẨN CỦA BOT THÔNG THƯỜNG:
+    return evaluateStandardBotSignal(config, state, snapshot, eventDetail);
+  }
 }
 
 // ── Background Runner Orchestrators (Hooked into 1s loop) ──
 
-interface RoundBotEvaluation {
-  mtid: number;
-  reason: string;
-  bestOdds?: number;
-  bestSide?: 'Up' | 'Down';
-  timestamp: number;
-  priority: number;
-}
 
-const roundEvaluations = new Map<string, RoundBotEvaluation>();
 
 /**
  * Quét các bot đang bật mỗi giây trong vòng lặp collector
@@ -780,6 +958,20 @@ export async function tickMultiBots(
     downTokenId?: string;
   }
 ): Promise<void> {
+  // Ghi nhận liên tục Đỉnh Odds của vòng hiện tại (bảo đảm mọi giây đều được lưu đỉnh để rà soát Trap)
+  if (snapshot && snapshot.mtid) {
+    const curFavOdds = Math.max(snapshot.up, snapshot.dn);
+    const curFavSide: 'Up' | 'Down' = snapshot.up >= snapshot.dn ? 'Up' : 'Down';
+    const existingPeak = roundPeakOddsMap.get(snapshot.mtid);
+    if (!existingPeak || curFavOdds > existingPeak.peakOdds) {
+      roundPeakOddsMap.set(snapshot.mtid, { peakOdds: curFavOdds, peakSide: curFavSide, peakTr: snapshot.tr });
+    }
+    if (roundPeakOddsMap.size > 30) {
+      const keys = Array.from(roundPeakOddsMap.keys());
+      for (let i = 0; i < keys.length - 20; i++) roundPeakOddsMap.delete(keys[i]);
+    }
+  }
+
   const configs = loadBotsConfig();
   const states = loadBotsState();
   let modified = false;
@@ -897,36 +1089,6 @@ export async function tickMultiBots(
       } else {
         console.log(`[MULTI-BOT] 🎯 BOT "${config.name}" (SIMULATOR) CƯỢC ẢO: ${signal.side} $${signal.stake} @ ${(signal.odds * 100).toFixed(1)}% (Lý do: ${signal.reason})`);
         logBotActivity(tradeLog);
-      }
-    } else {
-      // Cập nhật lý do không vào lệnh đại diện nhất trong kỳ này
-      const evalKey = `${config.id}_${snapshot.mtid}`;
-      const favOdds = Math.max(snapshot.up, snapshot.dn);
-      const favSide: 'Up' | 'Down' = snapshot.up >= snapshot.dn ? 'Up' : 'Down';
-
-      let priority = 1;
-      if (signal.reason.includes('Cooldown') || signal.reason.includes('tối đa trong ngày')) {
-        priority = 10;
-      } else if (signal.reason.includes('Odds')) {
-        priority = 8;
-      } else if (signal.reason.includes('Đệm giá')) {
-        priority = 6;
-      } else if (signal.reason.includes('Ngoài khung phút')) {
-        priority = 4;
-      } else if (signal.reason.includes('Ngoài phiên')) {
-        priority = 4;
-      }
-
-      const existing = roundEvaluations.get(evalKey);
-      if (!existing || priority > existing.priority || (priority === existing.priority && favOdds > (existing.bestOdds || 0))) {
-        roundEvaluations.set(evalKey, {
-          mtid: snapshot.mtid,
-          reason: signal.reason,
-          bestOdds: favOdds,
-          bestSide: favSide,
-          timestamp: Date.now(),
-          priority,
-        });
       }
     }
   }
@@ -1046,40 +1208,10 @@ export function resolveMultiBots(result: RoundResult): void {
         modified = true;
       }
 
-      // Ghi log BỎ QUA (SKIP) nếu bot đang bật
-      if (config.enabled) {
-        const evalKey = `${config.id}_${result.mtid}`;
-        const evalData = roundEvaluations.get(evalKey);
-        const skipReason = evalData?.reason || 'Không xuất hiện tín hiệu thỏa mãn điều kiện chiến lược trong kỳ';
-
-        const skipLog: BotTradeLog = {
-          id: `skip_${result.mtid}_${config.id}`,
-          botId: config.id,
-          botName: config.name,
-          mtid: result.mtid,
-          timestamp: evalData?.timestamp || Date.now(),
-          side: evalData?.bestSide || 'Up',
-          odds: evalData?.bestOdds || 0,
-          stake: state.currentStake,
-          step: state.currentStep,
-          mode: config.mode,
-          status: 'SKIPPED',
-          pnl: 0,
-          skipReason,
-        };
-
-        logBotActivity(skipLog);
-        console.log(`[MULTI-BOT] ⏭️ BOT "${config.name}" BỎ QUA Kỳ #${result.mtid}. Lý do: ${skipReason}`);
-      }
+      // Nếu không vào lệnh, bỏ qua hoàn toàn không ghi log
     }
   }
 
-  // Dọn dẹp evaluation cache của các kỳ cũ hơn 5 kỳ
-  for (const [key, val] of roundEvaluations.entries()) {
-    if (val.mtid < result.mtid - 5) {
-      roundEvaluations.delete(key);
-    }
-  }
 
   if (modified) {
     saveBotsState(states);

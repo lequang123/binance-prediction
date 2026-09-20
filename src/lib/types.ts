@@ -310,7 +310,7 @@ export interface OddsStatsResult {
 // Multi-Bot Studio Types
 // ============================================================
 
-export type BotStrategy = 'MARTINGALE_FAVORITE' | 'UNDERDOG_HUNTER' | 'EV_SNIPER';
+export type BotStrategy = 'MARTINGALE_FAVORITE' | 'UNDERDOG_HUNTER' | 'EV_SNIPER' | 'TRAP_TRADERS';
 
 export interface BotConfig {
   id: string;
@@ -333,6 +333,11 @@ export interface BotConfig {
   targetOddsBuckets?: string[];    // Danh sách các mốc odds được chọn (ví dụ: ['80-85', '85-90', '90-95'])
   sessions: TradingSession[];      // ['all'] hoặc ['asia', 'us', ...]
   targetMinutes?: ('5-4m' | '4-3m' | '3-2m' | '2-1m' | '1-0m')[]; // Chọn phút vào lệnh (ví dụ: ['2-1m'])
+
+  // Cấu hình Bẫy Trader (Trap Traders - Đảo chiều phút cuối)
+  trapPeakOddsMin?: number;        // Đỉnh Odds tối thiểu trong 4 phút đầu (mặc định: 0.90)
+  trapMinPriceReversal?: number;   // Biên độ giá đảo chiều tối thiểu so với startPrice (mặc định: $15)
+  trapMaxOdds?: number;            // Trần Odds cửa mới khi vào lệnh (mặc định: 0.85)
 
   // Bộ lọc tránh thua lỗ
   cooldownRounds?: number;         // (Đã bỏ) Số vòng nghỉ sau khi thua
