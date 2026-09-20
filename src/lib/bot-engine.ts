@@ -38,7 +38,6 @@ export const DEFAULT_PRESET_BOTS: BotConfig[] = [
     oddsMax: 0.90,
     sessions: ['all'],
     targetMinutes: ['2-1m'],
-    cooldownRounds: 1,
     minTimeRemaining: 60,
     maxTimeRemaining: 120,
     minPriceBuffer: 20,
@@ -61,7 +60,6 @@ export const DEFAULT_PRESET_BOTS: BotConfig[] = [
     oddsMax: 0.90,
     sessions: ['all'],
     targetMinutes: ['1-0m'],
-    cooldownRounds: 1,
     minTimeRemaining: 35,
     maxTimeRemaining: 60,
     minPriceBuffer: 20,
@@ -83,7 +81,6 @@ export const DEFAULT_PRESET_BOTS: BotConfig[] = [
     oddsMin: 0.85,
     oddsMax: 0.90,
     sessions: ['all'],
-    cooldownRounds: 2,
     minTimeRemaining: 35,
     maxTimeRemaining: 240,
     minPriceBuffer: 20,
@@ -104,7 +101,6 @@ export const DEFAULT_PRESET_BOTS: BotConfig[] = [
     oddsMin: 0.85,
     oddsMax: 0.90,
     sessions: ['all'],
-    cooldownRounds: 2,
     minTimeRemaining: 35,
     maxTimeRemaining: 240,
     minPriceBuffer: 20,
@@ -125,7 +121,6 @@ export const DEFAULT_PRESET_BOTS: BotConfig[] = [
     oddsMin: 0.05,
     oddsMax: 0.20,
     sessions: ['all'],
-    cooldownRounds: 1,
     targetMinutes: ['3-2m'],
     minTimeRemaining: 120,
     maxTimeRemaining: 180,
@@ -388,7 +383,6 @@ export function runBotBacktest(
   const maxSteps = isFlat ? 1 : (useLadder ? ladder.length : (config.maxSteps || 2));
   const multiplier = isFlat ? 1.0 : (config.multiplier || 4.0);
   let stake = useLadder ? ladder[0] : config.baseStake;
-  let cooldown = 0;
   let step = 1;
   let wins = 0;
   let losses = 0;
@@ -417,12 +411,6 @@ export function runBotBacktest(
 
     // Kiểm tra giới hạn Max Daily Loss
     if (config.maxDailyLoss > 0 && dailyLoss >= config.maxDailyLoss) {
-      continue;
-    }
-
-    // Nếu đang trong thời gian Cooldown
-    if (cooldown > 0) {
-      cooldown--;
       continue;
     }
 
@@ -528,10 +516,7 @@ export function runBotBacktest(
         pnl = -bet;
         balance -= bet;
         dailyLoss += bet;
-        cooldown = config.cooldownRounds;
-        actionNote = cooldown > 0
-          ? `❌ Thua (-$${bet}) -> Nghỉ ${cooldown} trận (Cooldown)`
-          : `❌ Thua (-$${bet}) -> Tiếp tục đánh đều $${stake}`;
+        actionNote = `❌ Thua (-$${bet}) -> Tiếp tục đánh đều $${stake}`;
       }
     } else {
       // 2. Chế độ Gấp thếp (Martingale) hoặc Chuỗi vốn (Ladder)
@@ -551,14 +536,12 @@ export function runBotBacktest(
         if (step < maxSteps) {
           step++;
           stake = useLadder ? ladder[step - 1] : config.baseStake * Math.pow(multiplier, step - 1);
-          cooldown = config.cooldownRounds;
-          actionNote = `❌ Thua B${currentStep} -> Nghỉ ${cooldown}T, Lên B${step} ($${stake})`;
+          actionNote = `❌ Thua B${currentStep} -> Lên B${step} ($${stake})`;
         } else {
           // Cắt lỗ khi chạm số bước tối đa
           cutLossCount++;
           step = 1;
           stake = useLadder ? ladder[0] : config.baseStake;
-          cooldown = config.cooldownRounds;
           actionNote = `⚠️ Cắt lỗ chuỗi B${currentStep} -> Reset B1 ($${stake})`;
         }
       }
@@ -640,10 +623,6 @@ export function evaluateBotSignal(
     return { shouldTrade: false, reason: 'Đã vào lệnh cho vòng cược này' };
   }
 
-  // 2. Kiểm tra Cooldown
-  if (state.status === 'COOLDOWN' && state.cooldownRemaining > 0) {
-    return { shouldTrade: false, reason: `Đang Cooldown (còn ${state.cooldownRemaining} trận)` };
-  }
 
   // 3. Kiểm tra Giới hạn Max Daily Loss
   if (config.maxDailyLoss > 0 && state.dailyLoss >= config.maxDailyLoss) {
@@ -971,11 +950,11 @@ export function resolveMultiBots(result: RoundResult): void {
           state.dailyLoss += bet;
           state.currentStep = 1;
           state.currentStake = baseStake;
-          state.cooldownRemaining = config.cooldownRounds;
-          state.status = config.cooldownRounds > 0 ? 'COOLDOWN' : 'IDLE';
+          state.cooldownRemaining = 0;
+          state.status = 'IDLE';
 
           updateBotTradeResolution(result.mtid, config.id, false, -bet);
-          console.log(`[MULTI-BOT] ❌ BOT "${config.name}" (ĐỀU TAY) THUA KỲ #${result.mtid}! (-$${bet}). Cooldown ${config.cooldownRounds} trận. Giữ đều $${baseStake}`);
+          console.log(`[MULTI-BOT] ❌ BOT "${config.name}" (ĐỀU TAY) THUA KỲ #${result.mtid}! (-$${bet}). Giữ đều $${baseStake}`);
         }
       } else {
         // 2. Chế độ Gấp thếp (Martingale) hoặc Chuỗi bậc thang (Ladder)
@@ -1001,18 +980,18 @@ export function resolveMultiBots(result: RoundResult): void {
             state.currentStake = useLadder
               ? ladder[state.currentStep - 1]
               : Number((config.baseStake * Math.pow(config.multiplier, state.currentStep - 1)).toFixed(2));
-            state.cooldownRemaining = config.cooldownRounds;
-            state.status = 'COOLDOWN';
+            state.cooldownRemaining = 0;
+            state.status = 'IDLE';
 
-            console.log(`[MULTI-BOT] ❌ BOT "${config.name}" THUA KỲ #${result.mtid}! (-$${bet}). Cooldown ${config.cooldownRounds} trận. Bước tiếp theo cược $${state.currentStake}`);
+            console.log(`[MULTI-BOT] ❌ BOT "${config.name}" THUA KỲ #${result.mtid}! (-$${bet}). Bước tiếp theo cược $${state.currentStake}`);
           } else {
             // Chạm số bước tối đa -> Cắt lỗ
             state.currentStep = 1;
             state.currentStake = baseStake;
-            state.cooldownRemaining = config.cooldownRounds;
-            state.status = 'COOLDOWN';
+            state.cooldownRemaining = 0;
+            state.status = 'IDLE';
 
-            console.log(`[MULTI-BOT] ⚠️ BOT "${config.name}" CẮT LỖ (Chạm tối đa ${maxSteps} bước). Reset về $${baseStake}. Cooldown ${config.cooldownRounds} trận.`);
+            console.log(`[MULTI-BOT] ⚠️ BOT "${config.name}" CẮT LỖ (Chạm tối đa ${maxSteps} bước). Reset về $${baseStake}`);
           }
         }
       }
@@ -1023,39 +1002,43 @@ export function resolveMultiBots(result: RoundResult): void {
         console.log(`[MULTI-BOT] 🛑 BOT "${config.name}" ĐÃ TỰ ĐỘNG DỪNG do chạm giới hạn lỗ $${config.maxDailyLoss}!`);
       }
 
+      state.lastActiveMarketId = null;
+      state.lastTradeSide = undefined;
+      state.lastTradeOdds = undefined;
       modified = true;
-    } else if (config.enabled && state.lastActiveMarketId !== result.mtid) {
-      // 2. Bot đang BẬT nhưng không cược ở kỳ này -> Ghi nhận log BỎ QUA (SKIP) kèm lý do
-      const evalKey = `${config.id}_${result.mtid}`;
-      const evalData = roundEvaluations.get(evalKey);
-      const skipReason = evalData?.reason || 'Không xuất hiện tín hiệu thỏa mãn điều kiện chiến lược trong kỳ';
-
-      const skipLog: BotTradeLog = {
-        id: `skip_${result.mtid}_${config.id}`,
-        botId: config.id,
-        botName: config.name,
-        mtid: result.mtid,
-        timestamp: evalData?.timestamp || Date.now(),
-        side: evalData?.bestSide || 'Up',
-        odds: evalData?.bestOdds || 0,
-        stake: state.currentStake,
-        step: state.currentStep,
-        mode: config.mode,
-        status: 'SKIPPED',
-        pnl: 0,
-        skipReason,
-      };
-
-      logBotActivity(skipLog);
-      console.log(`[MULTI-BOT] ⏭️ BOT "${config.name}" BỎ QUA Kỳ #${result.mtid}. Lý do: ${skipReason}`);
-    } else if (state.status === 'COOLDOWN' && state.cooldownRemaining > 0) {
-      // 3. Nếu bot đang cooldown ở các vòng sau
-      state.cooldownRemaining--;
-      if (state.cooldownRemaining === 0) {
+    } else {
+      // 2. Bot KHÔNG cược ở kỳ này (không đủ điều kiện tín hiệu)
+      if (state.status === 'COOLDOWN') {
         state.status = 'IDLE';
-        console.log(`[MULTI-BOT] 🔔 BOT "${config.name}" ĐÃ HẾT COOLDOWN. Sẵn sàng vào lệnh tiếp theo!`);
+        state.cooldownRemaining = 0;
+        modified = true;
       }
-      modified = true;
+
+      // Ghi log BỎ QUA (SKIP) nếu bot đang bật
+      if (config.enabled) {
+        const evalKey = `${config.id}_${result.mtid}`;
+        const evalData = roundEvaluations.get(evalKey);
+        const skipReason = evalData?.reason || 'Không xuất hiện tín hiệu thỏa mãn điều kiện chiến lược trong kỳ';
+
+        const skipLog: BotTradeLog = {
+          id: `skip_${result.mtid}_${config.id}`,
+          botId: config.id,
+          botName: config.name,
+          mtid: result.mtid,
+          timestamp: evalData?.timestamp || Date.now(),
+          side: evalData?.bestSide || 'Up',
+          odds: evalData?.bestOdds || 0,
+          stake: state.currentStake,
+          step: state.currentStep,
+          mode: config.mode,
+          status: 'SKIPPED',
+          pnl: 0,
+          skipReason,
+        };
+
+        logBotActivity(skipLog);
+        console.log(`[MULTI-BOT] ⏭️ BOT "${config.name}" BỎ QUA Kỳ #${result.mtid}. Lý do: ${skipReason}`);
+      }
     }
   }
 

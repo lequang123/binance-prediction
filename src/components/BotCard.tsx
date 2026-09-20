@@ -114,8 +114,8 @@ export default function BotCard({
                 {config.stakeMode === 'FLAT'
                   ? `🛡️ Đi đều $${config.baseStake}`
                   : config.stakeMode === 'CUSTOM_LADDER'
-                  ? `🪜 Chuỗi [${config.customLadder?.join(',')}]`
-                  : `🎯 Gấp ${config.multiplier}x`}
+                    ? `🪜 Chuỗi [${config.customLadder?.join(',')}]`
+                    : `🎯 Gấp ${config.multiplier}x`}
               </span>
               <span style={{
                 background: 'rgba(234, 179, 8, 0.12)',
@@ -136,7 +136,9 @@ export default function BotCard({
                 borderRadius: 4,
                 fontSize: '0.7rem',
               }}>
-                Odds {config.oddsMin * 100}-{config.oddsMax * 100}%
+                {config.targetOddsBuckets && config.targetOddsBuckets.length > 0
+                  ? `Odds ${config.targetOddsBuckets.join(', ')}%`
+                  : `Odds ${config.oddsMin * 100}-${config.oddsMax * 100}%`}
               </span>
               {config.mode === 'REAL_TRADE' && (
                 <span style={{
@@ -221,8 +223,6 @@ export default function BotCard({
         {/* Settings Summary */}
         <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: 16, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           <span>🛡️ Đệm ${config.minPriceBuffer}</span>
-          <span>•</span>
-          <span>⏳ Nghỉ {config.cooldownRounds}T sau thua</span>
           <span>•</span>
           <span>🛑 Max Loss ${config.maxDailyLoss}/ngày</span>
         </div>

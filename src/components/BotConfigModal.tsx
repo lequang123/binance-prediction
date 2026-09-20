@@ -40,7 +40,6 @@ const DEFAULT_CONFIG: BotConfig = {
   targetOddsBuckets: ['85-90'],
   sessions: ['all'],
   targetMinutes: ['2-1m'],
-  cooldownRounds: 1,
   minTimeRemaining: 60,
   maxTimeRemaining: 120,
   minPriceBuffer: 20,
@@ -272,7 +271,6 @@ export default function BotConfigModal({
         targetOddsBuckets: ['85-90'],
         oddsMin: 0.85,
         oddsMax: 0.90,
-        cooldownRounds: 1,
         targetMinutes: ['1-0m'],
         minTimeRemaining: 35,
         maxTimeRemaining: 60,
@@ -292,7 +290,6 @@ export default function BotConfigModal({
         targetOddsBuckets: ['85-90'],
         oddsMin: 0.85,
         oddsMax: 0.90,
-        cooldownRounds: 1,
         targetMinutes: ['2-1m'],
         minTimeRemaining: 60,
         maxTimeRemaining: 120,
@@ -314,7 +311,6 @@ export default function BotConfigModal({
         targetOddsBuckets: ['85-90'],
         oddsMin: 0.85,
         oddsMax: 0.90,
-        cooldownRounds: 2,
         targetMinutes: undefined,
         minTimeRemaining: 35,
         maxTimeRemaining: 240,
@@ -334,7 +330,6 @@ export default function BotConfigModal({
         targetOddsBuckets: ['85-90'],
         oddsMin: 0.85,
         oddsMax: 0.90,
-        cooldownRounds: 2,
         targetMinutes: undefined,
         minTimeRemaining: 35,
         maxTimeRemaining: 240,
@@ -354,7 +349,6 @@ export default function BotConfigModal({
         targetOddsBuckets: ['50-55', '55-60'],
         oddsMin: 0.05,
         oddsMax: 0.20,
-        cooldownRounds: 1,
         targetMinutes: ['3-2m'],
         minTimeRemaining: 120,
         maxTimeRemaining: 180,
@@ -374,7 +368,6 @@ export default function BotConfigModal({
         targetOddsBuckets: ['70-75', '75-80', '80-85'],
         oddsMin: 0.70,
         oddsMax: 0.85,
-        cooldownRounds: 1,
         targetMinutes: ['5-4m'],
         minTimeRemaining: 240,
         maxTimeRemaining: 300,
@@ -934,8 +927,8 @@ export default function BotConfigModal({
 
                 <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 6, display: 'flex', justifyContent: 'space-between' }}>
                   <span>
-                    {config.customLadder && config.customLadder.length > 0 
-                      ? `Áp dụng: ${config.customLadder.map((v, i) => `Bước ${i+1}: $${v}`).join(' ➔ ')}`
+                    {config.customLadder && config.customLadder.length > 0
+                      ? `Áp dụng: ${config.customLadder.map((v, i) => `Bước ${i + 1}: $${v}`).join(' ➔ ')}`
                       : 'Ví dụ: 1, 6, 15, 40'}
                   </span>
                   {config.customLadder && config.customLadder.length > 0 && (
@@ -1053,7 +1046,7 @@ export default function BotConfigModal({
               🛡️ 3. BỘ LỌC ĐỆM GIÁ AN TOÀN (CHỐNG LẬT KÈO SÁT NÚT):
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 14 }}>
+            <div>
               <div>
                 <label style={{ display: 'block', fontSize: '0.78rem', color: '#cbd5e1', marginBottom: 6 }}>
                   Đệm giá an toàn ($) - Khuyên dùng: $20
@@ -1093,23 +1086,6 @@ export default function BotConfigModal({
                 />
                 <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 4 }}>
                   Chỉ vào lệnh khi khoảng cách giá so với giá chốt $\ge$ ${config.minPriceBuffer}. Bỏ toàn bộ râu nến giật sát rạt!
-                </div>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '0.78rem', color: '#cbd5e1', marginBottom: 6 }}>
-                  Nghỉ sau khi thua (Số trận Cooldown)
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  max={5}
-                  value={config.cooldownRounds}
-                  onChange={(e) => handleChange('cooldownRounds', Number(e.target.value))}
-                  style={{ width: '100%', background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '8px 10px', color: '#f8fafc' }}
-                />
-                <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 4 }}>
-                  Sau khi thua 1 lệnh, nghỉ {config.cooldownRounds} trận để chờ thị trường bình ổn.
                 </div>
               </div>
             </div>

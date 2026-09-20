@@ -15,13 +15,12 @@
     "sessions": [
       "all"
     ],
-    "cooldownRounds": 1,
     "minTimeRemaining": 20,
     "maxTimeRemaining": 120,
     "minPriceBuffer": 30,
     "maxSlippageBps": 450,
     "createdAt": 1789875319746,
-    "updatedAt": 1789895753382,
+    "updatedAt": 1789897473721,
     "targetOddsBuckets": [
       "85-90",
       "90-95"
@@ -46,7 +45,6 @@
     "sessions": [
       "all"
     ],
-    "cooldownRounds": 1,
     "minTimeRemaining": 35,
     "maxTimeRemaining": 60,
     "minPriceBuffer": 20,
@@ -82,7 +80,6 @@
     "sessions": [
       "all"
     ],
-    "cooldownRounds": 2,
     "minTimeRemaining": 35,
     "maxTimeRemaining": 240,
     "minPriceBuffer": 20,
@@ -105,7 +102,6 @@
     "sessions": [
       "all"
     ],
-    "cooldownRounds": 2,
     "minTimeRemaining": 35,
     "maxTimeRemaining": 240,
     "minPriceBuffer": 20,

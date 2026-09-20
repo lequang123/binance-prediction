@@ -335,7 +335,7 @@ export interface BotConfig {
   targetMinutes?: ('5-4m' | '4-3m' | '3-2m' | '2-1m' | '1-0m')[]; // Chọn phút vào lệnh (ví dụ: ['2-1m'])
 
   // Bộ lọc tránh thua lỗ
-  cooldownRounds: number;          // Số vòng nghỉ sau khi thua (mặc định: 2)
+  cooldownRounds?: number;         // (Đã bỏ) Số vòng nghỉ sau khi thua
   minTimeRemaining: number;        // Chặn giây cuối (mặc định: 35s)
   maxTimeRemaining: number;        // Chặn vào quá sớm (mặc định: 240s)
   minPriceBuffer: number;          // Đệm giá an toàn tối thiểu (mặc định: $20)
@@ -349,7 +349,7 @@ export interface BotRuntimeState {
   botId: string;
   currentStake: number;
   currentStep: number;
-  cooldownRemaining: number;
+  cooldownRemaining?: number;
   dailyLoss: number;
   dailyPnl: number;
   totalTrades: number;
