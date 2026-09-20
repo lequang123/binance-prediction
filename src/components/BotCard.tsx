@@ -47,9 +47,6 @@ export default function BotCard({
     if (state?.status === 'IN_TRADE') {
       return { bg: 'rgba(59, 130, 246, 0.2)', color: '#60a5fa', text: '⚡ ĐANG CƯỢC' };
     }
-    if (state?.status === 'COOLDOWN') {
-      return { bg: 'rgba(234, 179, 8, 0.2)', color: '#facc15', text: `⏳ COOLDOWN (${state.cooldownRemaining}T)` };
-    }
     if (state?.status === 'STOPPED_MAX_LOSS') {
       return { bg: 'rgba(239, 68, 68, 0.2)', color: '#f87171', text: '🛑 CHẠM MAX LOSS' };
     }

@@ -408,6 +408,7 @@ export interface BotTradeLog {
   orderId?: string;
   shares?: number;
   fillPrice?: number;
+  triggerOdds?: number;
   skipReason?: string;
 }
 

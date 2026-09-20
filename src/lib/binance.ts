@@ -37,10 +37,12 @@ const getHeaders = (): Record<string, string> => ({
 export async function fetchPositions(
   type: 'open' | 'closed',
   page: number = 1,
-  pageSize: number = 20
+  pageSize: number = 20,
+  customWalletAddress?: string
 ): Promise<{ entries: BinancePosition[]; total: number }> {
+  const targetWallet = customWalletAddress || WALLET_ADDRESS;
   const body = {
-    walletAddress: WALLET_ADDRESS,
+    walletAddress: targetWallet,
     type,
     sortBy: 'TIME',
     sortOrder: 'DESC',

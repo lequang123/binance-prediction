@@ -197,6 +197,26 @@ export default function BotConfigModal({
     triggerBacktest(updated);
   };
 
+  const handleLadderTextChange = (text: string) => {
+    setLadderText(text);
+    const parts = text
+      .split(',')
+      .map((s) => Number(s.trim()))
+      .filter((n) => !isNaN(n) && n > 0);
+
+    if (parts.length > 0) {
+      const updated: BotConfig = {
+        ...config,
+        stakeMode: 'CUSTOM_LADDER',
+        customLadder: parts,
+        maxSteps: parts.length,
+        baseStake: parts[0],
+      };
+      setConfig(updated);
+      triggerBacktest(updated);
+    }
+  };
+
   const handleSelectMinutePreset = (presetKey: '1-0m' | '2-1m' | '3-2m' | '4-3m' | '5-4m' | '2-0m' | '3-1m' | 'all') => {
     let updated = { ...config };
 
@@ -291,7 +311,7 @@ export default function BotConfigModal({
         oddsMin: 0.85,
         oddsMax: 0.90,
         targetMinutes: ['2-1m'],
-        minTimeRemaining: 60,
+        minTimeRemaining: 20,
         maxTimeRemaining: 120,
         minPriceBuffer: 20,
       };
@@ -384,7 +404,30 @@ export default function BotConfigModal({
     e.preventDefault();
     setIsSaving(true);
     try {
-      await onSave(config);
+      let finalConfig: BotConfig = { ...config, stakeMode };
+
+      if (stakeMode === 'CUSTOM_LADDER') {
+        const parts = ladderText
+          .split(',')
+          .map((s) => Number(s.trim()))
+          .filter((n) => !isNaN(n) && n > 0);
+        const ladder = parts.length > 0 ? parts : [1, 6, 15, 40];
+        finalConfig.stakeMode = 'CUSTOM_LADDER';
+        finalConfig.customLadder = ladder;
+        finalConfig.maxSteps = ladder.length;
+        finalConfig.baseStake = ladder[0];
+        finalConfig.multiplier = 1.0;
+      } else if (stakeMode === 'FLAT') {
+        finalConfig.stakeMode = 'FLAT';
+        finalConfig.customLadder = undefined;
+        finalConfig.maxSteps = 1;
+        finalConfig.multiplier = 1.0;
+      } else if (stakeMode === 'MARTINGALE') {
+        finalConfig.stakeMode = 'MARTINGALE';
+        finalConfig.customLadder = undefined;
+      }
+
+      await onSave(finalConfig);
       onClose();
     } catch (err: any) {
       alert(err?.message || 'Lỗi khi lưu cấu hình bot');
@@ -884,20 +927,37 @@ export default function BotConfigModal({
                     <label style={{ display: 'block', fontSize: '0.78rem', color: '#cbd5e1', marginBottom: 6 }}>
                       🪜 Nhập chuỗi cược ngăn cách bằng dấu phẩy (Gõ tự do: 1, 6, 15, 40)
                     </label>
+                    <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+                      {[
+                        { label: '👑 1, 6, 15, 40', val: '1, 6, 15, 40' },
+                        { label: '⚡ 1, 3, 7, 15, 31', val: '1, 3, 7, 15, 31' },
+                        { label: '🛡️ 2, 8, 20, 50', val: '2, 8, 20, 50' },
+                        { label: '🎯 5, 20, 80', val: '5, 20, 80' },
+                      ].map((p) => (
+                        <button
+                          key={p.val}
+                          type="button"
+                          onClick={() => handleLadderTextChange(p.val)}
+                          style={{
+                            padding: '3px 8px',
+                            borderRadius: 6,
+                            border: ladderText === p.val ? '1px solid #10b981' : '1px solid #334155',
+                            background: ladderText === p.val ? 'rgba(16, 185, 129, 0.2)' : '#1e293b',
+                            color: ladderText === p.val ? '#34d399' : '#94a3b8',
+                            fontSize: '0.72rem',
+                            cursor: 'pointer',
+                            fontWeight: ladderText === p.val ? 700 : 500,
+                          }}
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
                     <input
                       type="text"
                       placeholder="VD: 1, 6, 15, 40"
                       value={ladderText}
-                      onChange={(e) => {
-                        const str = e.target.value;
-                        setLadderText(str);
-                        const parts = str.split(',').map((s) => Number(s.trim())).filter((n) => !isNaN(n) && n > 0);
-                        if (parts.length > 0) {
-                          handleChange('customLadder', parts);
-                          handleChange('maxSteps', parts.length);
-                          handleChange('baseStake', parts[0]);
-                        }
-                      }}
+                      onChange={(e) => handleLadderTextChange(e.target.value)}
                       style={{
                         width: '100%',
                         background: '#1e293b',
@@ -925,17 +985,23 @@ export default function BotConfigModal({
                   </div>
                 </div>
 
-                <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 6, display: 'flex', justifyContent: 'space-between' }}>
+                <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 8, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
                   <span>
-                    {config.customLadder && config.customLadder.length > 0
-                      ? `Áp dụng: ${config.customLadder.map((v, i) => `Bước ${i + 1}: $${v}`).join(' ➔ ')}`
-                      : 'Ví dụ: 1, 6, 15, 40'}
+                    {(() => {
+                      const parts = ladderText.split(',').map((s) => Number(s.trim())).filter((n) => !isNaN(n) && n > 0);
+                      return parts.length > 0
+                        ? `Áp dụng ${parts.length} bước: ${parts.map((v, i) => `B${i + 1}: $${v}`).join(' ➔ ')}`
+                        : 'Ví dụ: 1, 6, 15, 40';
+                    })()}
                   </span>
-                  {config.customLadder && config.customLadder.length > 0 && (
-                    <span style={{ fontWeight: 600, color: '#facc15' }}>
-                      Tổng vốn 1 chuỗi: ${config.customLadder.reduce((a, b) => a + b, 0)}
-                    </span>
-                  )}
+                  {(() => {
+                    const parts = ladderText.split(',').map((s) => Number(s.trim())).filter((n) => !isNaN(n) && n > 0);
+                    return parts.length > 0 ? (
+                      <span style={{ fontWeight: 600, color: '#facc15' }}>
+                        Tổng vốn 1 chuỗi: ${parts.reduce((a, b) => a + b, 0)} USDT
+                      </span>
+                    ) : null;
+                  })()}
                 </div>
               </div>
             )}

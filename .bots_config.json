@@ -5,11 +5,11 @@
     "enabled": true,
     "mode": "REAL_TRADE",
     "strategy": "MARTINGALE_FAVORITE",
-    "stakeMode": "FLAT",
+    "stakeMode": "MARTINGALE",
     "baseStake": 1,
-    "multiplier": 1,
-    "maxSteps": 1,
-    "maxDailyLoss": 100,
+    "multiplier": 2,
+    "maxSteps": 2,
+    "maxDailyLoss": 50,
     "oddsMin": 0.85,
     "oddsMax": 0.9,
     "sessions": [
@@ -18,12 +18,12 @@
     "minTimeRemaining": 20,
     "maxTimeRemaining": 120,
     "minPriceBuffer": 30,
-    "maxSlippageBps": 450,
+    "maxSlippageBps": 500,
     "createdAt": 1789875319746,
-    "updatedAt": 1789897473721,
+    "updatedAt": 1789900044145,
     "targetOddsBuckets": [
       "85-90",
-      "90-95"
+      "80-85"
     ],
     "targetMinutes": [
       "2-1m"

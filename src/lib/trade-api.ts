@@ -117,25 +117,80 @@ export async function executeLiveTrade(
     const inputUsdt = Number(amountIn) / 1e18;
     const estimatedFillPrice = estimatedShares > 0 ? inputUsdt / estimatedShares : 0;
 
+    const orderId = orderResult.data?.orderId || orderResult.orderId;
+
+    // Đợi 1200ms để Binance xử lý sổ lệnh và đồng bộ trạng thái thực tế
+    let actualShares = estimatedShares;
+    let actualFillPrice = estimatedFillPrice;
+    let isFailed = false;
+    let failReason = '';
+
+    if (orderId) {
+      await new Promise((r) => setTimeout(r, 1200));
+      const binanceOrder = await fetchBinanceOrder(orderId);
+      if (binanceOrder) {
+        if (binanceOrder.status === 'FAILED' || binanceOrder.status === 'CANCELED') {
+          isFailed = true;
+          failReason = `Binance FOK ${binanceOrder.status} (Không khớp/Trượt giá trên sàn)`;
+          console.warn(`[LIVE TRADE] ⚠️ Lệnh #${orderId} trên Binance bị ${binanceOrder.status}!`);
+        } else if (binanceOrder.status === 'FILLED') {
+          if (binanceOrder.filledShareQty && parseFloat(binanceOrder.filledShareQty) > 0) {
+            actualShares = parseFloat(binanceOrder.filledShareQty);
+          }
+          if (binanceOrder.price && parseFloat(binanceOrder.price) > 0) {
+            actualFillPrice = parseFloat(binanceOrder.price);
+          }
+          console.log(`[LIVE TRADE] ✅ Lệnh #${orderId} FILLED thực tế trên Binance: ${actualShares} shares @ price ${actualFillPrice}`);
+        }
+      }
+    }
+
     console.log(`\n==============================================`);
-    console.log(`[CHI TIẾT LỆNH COPY THÀNH CÔNG] 🚀 TokenID: ${tokenId}`);
-    console.log(`- Mã lệnh (OrderID):  ${orderResult.data?.orderId || orderResult.orderId || 'N/A'}`);
+    console.log(`[CHI TIẾT LỆNH THÀNH CÔNG] 🚀 TokenID: ${tokenId}`);
+    console.log(`- Mã lệnh (OrderID):  ${orderId || 'N/A'}`);
     console.log(`- Trader Fill Price:  ${traderOdds !== undefined ? traderOdds.toFixed(4) : 'N/A'}`);
-    console.log(`- Của bạn Fill Price: ${estimatedFillPrice.toFixed(4)}`);
-    console.log(`- Số Shares nhận đc:  +${estimatedShares.toFixed(2)} Shares`);
-    console.log(`- Lệch (Slippage):    ${traderOdds ? Math.abs(traderOdds - estimatedFillPrice).toFixed(4) : 'N/A'}`);
+    console.log(`- Giá khớp thực tế:   ${actualFillPrice.toFixed(4)}`);
+    console.log(`- Số Shares nhận đc:  +${actualShares.toFixed(2)} Shares`);
+    console.log(`- Trạng thái Binance: ${isFailed ? 'FAILED' : 'FILLED'}`);
     console.log(`==============================================\n`);
 
     return {
       orderResult,
-      orderId: orderResult.data?.orderId || orderResult.orderId,
-      shares: estimatedShares,
-      fillPrice: estimatedFillPrice,
+      orderId,
+      shares: actualShares,
+      fillPrice: actualFillPrice,
+      isFailed,
+      failReason,
       data: orderResult.data || orderResult,
     };
   } catch (error: any) {
     console.error(`[LIVE TRADE] ❌ Lỗi khi trade:`, error.message);
     throw error;
+  }
+}
+
+/**
+ * Tra cứu trạng thái và khối lượng khớp thực tế của 1 lệnh từ Binance Order History
+ */
+export async function fetchBinanceOrder(orderId: string): Promise<any | null> {
+  try {
+    const baseUrl = 'https://api.binance.com';
+    const timestamp = Date.now();
+    const params: Record<string, any> = { walletAddress: WALLET_ADDRESS, timestamp };
+    const queryString = Object.keys(params)
+      .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`)
+      .join('&');
+    const signature = crypto.createHmac('sha256', SECRET_KEY).update(queryString).digest('hex');
+    const fullUrl = `${baseUrl}/sapi/v1/w3w/wallet/prediction/order/history?${queryString}&signature=${signature}`;
+
+    const res = await fetch(fullUrl, { headers: { 'X-MBX-APIKEY': API_KEY } });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const orders = data.orders || [];
+    return orders.find((o: any) => o.orderId === orderId) || null;
+  } catch (err) {
+    console.error('[BINANCE ORDER SYNC ERROR]:', err);
+    return null;
   }
 }
 

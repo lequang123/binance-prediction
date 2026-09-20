@@ -425,7 +425,15 @@ export function runBotBacktest(
     for (const e of roundEntries) {
       // Bộ lọc theo phút nếu có chọn
       if (Array.isArray(config.targetMinutes) && config.targetMinutes.length > 0) {
-        if (!config.targetMinutes.includes(e.minuteBucket as any)) continue;
+        const allowedMinutes = new Set(config.targetMinutes);
+        if (config.minTimeRemaining !== undefined && config.maxTimeRemaining !== undefined) {
+          if (config.maxTimeRemaining > 240 && config.minTimeRemaining < 300) allowedMinutes.add('5-4m');
+          if (config.maxTimeRemaining > 180 && config.minTimeRemaining < 240) allowedMinutes.add('4-3m');
+          if (config.maxTimeRemaining > 120 && config.minTimeRemaining < 180) allowedMinutes.add('3-2m');
+          if (config.maxTimeRemaining > 60 && config.minTimeRemaining < 120) allowedMinutes.add('2-1m');
+          if (config.minTimeRemaining < 60) allowedMinutes.add('1-0m');
+        }
+        if (!allowedMinutes.has(e.minuteBucket as any)) continue;
       }
 
       // Bộ lọc thời gian còn lại
@@ -637,19 +645,29 @@ export function evaluateBotSignal(
     }
   }
 
-  // 5. Bộ lọc Khung phút vào lệnh
-  if (Array.isArray(config.targetMinutes) && config.targetMinutes.length > 0) {
-    if (!config.targetMinutes.includes(snapshot.mb as any)) {
-      return { shouldTrade: false, reason: `Ngoài khung phút đã chọn (Hiện tại: ${snapshot.mb || 'N/A'} vs cần: ${config.targetMinutes.join(', ')})` };
-    }
-  }
-
-  // 6. Bộ lọc Thời gian còn lại
-  if (snapshot.tr < config.minTimeRemaining) {
+  // 5. Bộ lọc Thời gian còn lại (Chính xác từng giây lẻ theo cấu hình)
+  if (config.minTimeRemaining !== undefined && snapshot.tr < config.minTimeRemaining) {
     return { shouldTrade: false, reason: `Thời gian còn lại quá ít (${snapshot.tr}s < ${config.minTimeRemaining}s - tránh râu nến giật)` };
   }
-  if (snapshot.tr > config.maxTimeRemaining) {
+  if (config.maxTimeRemaining !== undefined && snapshot.tr > config.maxTimeRemaining) {
     return { shouldTrade: false, reason: `Thời gian còn lại quá sớm (${snapshot.tr}s > ${config.maxTimeRemaining}s - nến chưa có đà)` };
+  }
+
+  // 6. Bộ lọc Khung phút vào lệnh
+  if (Array.isArray(config.targetMinutes) && config.targetMinutes.length > 0) {
+    // Tự động mở rộng các phút hợp lệ tương ứng với dải giây [minTimeRemaining, maxTimeRemaining]
+    const allowedMinutes = new Set(config.targetMinutes);
+    if (config.minTimeRemaining !== undefined && config.maxTimeRemaining !== undefined) {
+      if (config.maxTimeRemaining > 240 && config.minTimeRemaining < 300) allowedMinutes.add('5-4m');
+      if (config.maxTimeRemaining > 180 && config.minTimeRemaining < 240) allowedMinutes.add('4-3m');
+      if (config.maxTimeRemaining > 120 && config.minTimeRemaining < 180) allowedMinutes.add('3-2m');
+      if (config.maxTimeRemaining > 60 && config.minTimeRemaining < 120) allowedMinutes.add('2-1m');
+      if (config.minTimeRemaining < 60) allowedMinutes.add('1-0m');
+    }
+
+    if (!allowedMinutes.has(snapshot.mb as any)) {
+      return { shouldTrade: false, reason: `Ngoài khung phút đã chọn (Hiện tại: ${snapshot.mb || 'N/A'} vs cần: ${Array.from(allowedMinutes).join(', ')})` };
+    }
   }
 
   // 6. Bộ lọc Đệm giá an toàn
@@ -823,6 +841,7 @@ export async function tickMultiBots(
         timestamp: Date.now(),
         side: signal.side,
         odds: signal.odds,
+        triggerOdds: signal.odds,
         stake: signal.stake,
         step: state.currentStep,
         mode: config.mode,
@@ -839,6 +858,19 @@ export async function tickMultiBots(
           const slippageBps = config.maxSlippageBps || 450;
           const res = await executeLiveTrade(tokenId, 'BUY', amountInWei, signal.odds, slippageBps);
           tradeLog.orderId = res?.orderId || res?.orderResult?.data?.orderId || res?.orderResult?.orderId || res?.data?.orderId;
+          
+          if (res?.isFailed) {
+            console.warn(`[MULTI-BOT] ⚠️ Lệnh #${tradeLog.orderId} bị sàn Binance từ chối khớp (${res.failReason}), đánh dấu SKIPPED!`);
+            tradeLog.status = 'SKIPPED';
+            tradeLog.skipReason = res.failReason || 'Binance FOK FAILED (Không khớp trên sàn)';
+            tradeLog.pnl = 0;
+            state.status = 'IDLE';
+            state.lastActiveMarketId = null;
+            logBotActivity(tradeLog);
+            saveBotsState(states);
+            return;
+          }
+
           if (res?.shares && res.shares > 0) {
             tradeLog.shares = Number(res.shares.toFixed(4));
             state.lastTradeShares = res.shares;

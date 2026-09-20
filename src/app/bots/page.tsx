@@ -717,6 +717,11 @@ export default function BotsStudioPage() {
                               ({log.shares.toFixed(2)} shares)
                             </span>
                           ) : null}
+                          {log.triggerOdds && log.fillPrice && Math.abs(log.triggerOdds - log.fillPrice) >= 0.01 ? (
+                            <span style={{ fontSize: '0.68rem', color: '#a1a1aa' }}>
+                              Quét: {(log.triggerOdds * 100).toFixed(1)}%
+                            </span>
+                          ) : null}
                         </div>
                       ) : (
                         <span style={{ color: '#64748b' }}>—</span>
