@@ -138,6 +138,18 @@ export default function BotCard({
               }}>
                 Odds {config.oddsMin * 100}-{config.oddsMax * 100}%
               </span>
+              {config.mode === 'REAL_TRADE' && (
+                <span style={{
+                  background: 'rgba(244, 63, 94, 0.12)',
+                  color: '#fb7185',
+                  padding: '2px 8px',
+                  borderRadius: 4,
+                  fontSize: '0.7rem',
+                  fontWeight: 600,
+                }}>
+                  Trượt giá: {((config.maxSlippageBps || 450) / 100).toFixed(1)}%
+                </span>
+              )}
             </div>
           </div>
 

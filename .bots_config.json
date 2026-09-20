@@ -18,12 +18,14 @@
     "cooldownRounds": 1,
     "minTimeRemaining": 60,
     "maxTimeRemaining": 120,
-    "minPriceBuffer": 15,
+    "minPriceBuffer": 20,
+    "maxSlippageBps": 450,
     "createdAt": 1789875319746,
-    "updatedAt": 1789883160500,
+    "updatedAt": 1789885066650,
     "targetOddsBuckets": [
       "85-90",
-      "80-85"
+      "80-85",
+      "75-80"
     ],
     "targetMinutes": [
       "2-1m"

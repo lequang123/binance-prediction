@@ -42,29 +42,39 @@ async function postBinanceApi(endpoint: string, bodyData: any) {
   return data;
 }
 
+// Mức trượt giá tối đa cho phép (450 bps = 4.5%, siết chặt từ 1200 bps theo cấu hình)
+export const DEFAULT_SLIPPAGE_BPS = 450;
+
 // BƯỚC 1: Lấy báo giá
-export async function getPredictionQuote(walletAddress: string, tokenId: string, side: string, amountIn: string) {
+export async function getPredictionQuote(
+  walletAddress: string,
+  tokenId: string,
+  side: string,
+  amountIn: string,
+  slippageBps: number = DEFAULT_SLIPPAGE_BPS
+) {
   const bodyData: any = {
     walletAddress,
     tokenId,
     side,
     amountIn,
     orderType: 'MARKET',
-    slippageBps: 1200
+    slippageBps,
   };
-
-  // Xóa logic transfer CEX theo yêu cầu người dùng
-  // if (side === 'BUY') {
-  //   bodyData.fundingSource = 'CEX';
-  //   bodyData.fundTransferAmount = amountIn;
-  // }
 
   const data = await postBinanceApi('/sapi/v1/w3w/wallet/prediction/trade/get-quote', bodyData);
   return data;
 }
 
 // BƯỚC 2: Khớp lệnh
-async function placePredictionOrder(walletAddress: string, walletId: string, quoteId: string, side: string, amountIn: string) {
+async function placePredictionOrder(
+  walletAddress: string,
+  walletId: string,
+  quoteId: string,
+  side: string,
+  amountIn: string,
+  slippageBps: number = DEFAULT_SLIPPAGE_BPS
+) {
   const bodyData: any = {
     walletAddress,
     walletId,
@@ -72,24 +82,26 @@ async function placePredictionOrder(walletAddress: string, walletId: string, quo
     timeInForce: 'FOK',
     accountType: 'SPOT',
     orderType: 'MARKET',
-    slippageBps: 1200
+    slippageBps,
   };
-
-  // Xóa logic transfer CEX theo yêu cầu người dùng
-  // if (side === 'BUY') {
-  //   bodyData.fundingSource = 'CEX';
-  //   bodyData.fundTransferAmount = amountIn;
-  // }
 
   const data = await postBinanceApi('/sapi/v1/w3w/wallet/prediction/trade/place-order-bundle', bodyData);
   return data;
 }
 
-// Hàm execute chính để gọi từ mock-trader
-export async function executeLiveTrade(tokenId: string, side: 'BUY' | 'SELL', amountIn: string = '1000000000000000000', traderOdds?: number) {
+// Hàm execute chính để gọi từ mock-trader / multi-bot runner
+export async function executeLiveTrade(
+  tokenId: string,
+  side: 'BUY' | 'SELL',
+  amountIn: string = '1000000000000000000',
+  traderOdds?: number,
+  slippageBps: number = DEFAULT_SLIPPAGE_BPS
+) {
   try {
-    console.log(`[LIVE TRADE] ⏳ Xin quote cho Token: ${tokenId}, Side: ${side}, Amount: ${amountIn}...`);
-    const quoteResult = await getPredictionQuote(WALLET_ADDRESS, tokenId, side, amountIn);
+    console.log(
+      `[LIVE TRADE] ⏳ Xin quote cho Token: ${tokenId}, Side: ${side}, Amount: ${amountIn}, Max Slippage: ${slippageBps} bps (${(slippageBps / 100).toFixed(1)}%)...`
+    );
+    const quoteResult = await getPredictionQuote(WALLET_ADDRESS, tokenId, side, amountIn, slippageBps);
 
     const quoteId = quoteResult.data?.quoteId || quoteResult.quoteId;
     if (!quoteId) {
@@ -97,7 +109,7 @@ export async function executeLiveTrade(tokenId: string, side: 'BUY' | 'SELL', am
     }
 
     console.log(`[LIVE TRADE] ⏳ Đang khớp lệnh quoteId: ${quoteId}...`);
-    const orderResult = await placePredictionOrder(WALLET_ADDRESS, WALLET_ID, quoteId, side, amountIn);
+    const orderResult = await placePredictionOrder(WALLET_ADDRESS, WALLET_ID, quoteId, side, amountIn, slippageBps);
 
     // Tính toán số lượng shares và giá khớp thực tế từ báo giá (Quote)
     const amountOutStr = quoteResult.data?.amountOut || quoteResult.amountOut || '0';
@@ -114,7 +126,13 @@ export async function executeLiveTrade(tokenId: string, side: 'BUY' | 'SELL', am
     console.log(`- Lệch (Slippage):    ${traderOdds ? Math.abs(traderOdds - estimatedFillPrice).toFixed(4) : 'N/A'}`);
     console.log(`==============================================\n`);
 
-    return orderResult;
+    return {
+      orderResult,
+      orderId: orderResult.data?.orderId || orderResult.orderId,
+      shares: estimatedShares,
+      fillPrice: estimatedFillPrice,
+      data: orderResult.data || orderResult,
+    };
   } catch (error: any) {
     console.error(`[LIVE TRADE] ❌ Lỗi khi trade:`, error.message);
     throw error;

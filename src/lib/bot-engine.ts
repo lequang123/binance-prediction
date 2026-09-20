@@ -112,28 +112,43 @@ export const DEFAULT_PRESET_BOTS: BotConfig[] = [
   },
 ];
 
-// ── Storage Helpers ──
+// ── Storage Helpers (Optimized with In-Memory Caching) ──
+
+let cachedConfigs: BotConfig[] | null = null;
+let cachedConfigsMtime = 0;
+let cachedStates: Record<string, BotRuntimeState> | null = null;
+let cachedStatesMtime = 0;
 
 export function loadBotsConfig(): BotConfig[] {
   try {
     if (fs.existsSync(CONFIG_FILE)) {
+      const stats = fs.statSync(CONFIG_FILE);
+      if (cachedConfigs && stats.mtimeMs === cachedConfigsMtime) {
+        return cachedConfigs;
+      }
       const data = fs.readFileSync(CONFIG_FILE, 'utf8');
       const configs = JSON.parse(data) as BotConfig[];
       if (Array.isArray(configs) && configs.length > 0) {
+        cachedConfigs = configs;
+        cachedConfigsMtime = stats.mtimeMs;
         return configs;
       }
     }
   } catch (e) {
     console.error('[BOT ENGINE] Lỗi khi đọc config bots:', e);
   }
-  // Mặc định lưu preset nếu chưa có file
-  saveBotsConfig(DEFAULT_PRESET_BOTS);
-  return DEFAULT_PRESET_BOTS;
+  if (!cachedConfigs) {
+    saveBotsConfig(DEFAULT_PRESET_BOTS);
+    return DEFAULT_PRESET_BOTS;
+  }
+  return cachedConfigs;
 }
 
 export function saveBotsConfig(configs: BotConfig[]): void {
   try {
+    cachedConfigs = configs;
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(configs, null, 2), 'utf8');
+    cachedConfigsMtime = fs.statSync(CONFIG_FILE).mtimeMs;
   } catch (e) {
     console.error('[BOT ENGINE] Lỗi khi lưu config bots:', e);
   }
@@ -142,18 +157,26 @@ export function saveBotsConfig(configs: BotConfig[]): void {
 export function loadBotsState(): Record<string, BotRuntimeState> {
   try {
     if (fs.existsSync(STATE_FILE)) {
+      const stats = fs.statSync(STATE_FILE);
+      if (cachedStates && stats.mtimeMs === cachedStatesMtime) {
+        return cachedStates;
+      }
       const data = fs.readFileSync(STATE_FILE, 'utf8');
-      return JSON.parse(data);
+      cachedStates = JSON.parse(data);
+      cachedStatesMtime = stats.mtimeMs;
+      return cachedStates || {};
     }
   } catch (e) {
     console.error('[BOT ENGINE] Lỗi khi đọc state bots:', e);
   }
-  return {};
+  return cachedStates || {};
 }
 
 export function saveBotsState(states: Record<string, BotRuntimeState>): void {
   try {
+    cachedStates = states;
     fs.writeFileSync(STATE_FILE, JSON.stringify(states, null, 2), 'utf8');
+    cachedStatesMtime = fs.statSync(STATE_FILE).mtimeMs;
   } catch (e) {
     console.error('[BOT ENGINE] Lỗi khi lưu state bots:', e);
   }
@@ -182,7 +205,11 @@ export function updateBotTradeResolution(mtid: number, botId: string, isWin: boo
         const item = JSON.parse(lines[i]) as BotTradeLog;
         if (item.mtid === mtid && item.botId === botId && item.status === 'PENDING') {
           item.status = isWin ? 'WIN' : 'LOSS';
-          item.pnl = Number(pnl.toFixed(2));
+          if (isWin && item.shares && item.shares > 0) {
+            item.pnl = Number((item.shares - item.stake).toFixed(2));
+          } else {
+            item.pnl = Number(pnl.toFixed(2));
+          }
           lines[i] = JSON.stringify(item);
           updated = true;
           break;
@@ -225,8 +252,8 @@ export function readBotTradeLogs(botId?: string, limit: number = 50): BotTradeLo
           const res = resultsMap.get(item.mtid)!;
           const isWin = item.side === res.winner;
           item.status = isWin ? 'WIN' : 'LOSS';
-          const amountOut = 1 / item.odds;
-          item.pnl = isWin ? Number((item.stake * (amountOut - 1)).toFixed(2)) : -item.stake;
+          const amountOut = item.shares && item.shares > 0 ? item.shares : (item.stake / item.odds);
+          item.pnl = isWin ? Number((amountOut - item.stake).toFixed(2)) : -item.stake;
           lines[i] = JSON.stringify(item);
           modified = true;
         }
@@ -738,14 +765,28 @@ export async function tickMultiBots(
         console.log(`[MULTI-BOT] 🚀 BOT "${config.name}" VÀO LỆNH THẬT: ${signal.side} $${signal.stake} @ ${(signal.odds * 100).toFixed(1)}%`);
         const amountInWei = (BigInt(Math.floor(signal.stake * 1e6)) * BigInt('1000000000000')).toString();
 
-        import('./trade-api').then(({ executeLiveTrade }) => {
-          executeLiveTrade(tokenId, 'BUY', amountInWei, signal.odds).then((res: any) => {
-            tradeLog.orderId = res?.data?.orderId || res?.orderId;
-            logBotActivity(tradeLog);
-          }).catch((err) => {
-            console.error(`[MULTI-BOT REAL TRADE ERROR] Bot "${config.name}" lỗi đặt lệnh:`, err.message || err);
-          });
-        });
+        try {
+          const { executeLiveTrade } = await import('./trade-api');
+          const slippageBps = config.maxSlippageBps || 450;
+          const res = await executeLiveTrade(tokenId, 'BUY', amountInWei, signal.odds, slippageBps);
+          tradeLog.orderId = res?.orderId || res?.orderResult?.data?.orderId || res?.orderResult?.orderId || res?.data?.orderId;
+          if (res?.shares && res.shares > 0) {
+            tradeLog.shares = Number(res.shares.toFixed(4));
+            state.lastTradeShares = res.shares;
+          }
+          if (res?.fillPrice && res.fillPrice > 0) {
+            tradeLog.fillPrice = Number(res.fillPrice.toFixed(4));
+            tradeLog.odds = Number(res.fillPrice.toFixed(4));
+            state.lastTradeOdds = res.fillPrice;
+          }
+          logBotActivity(tradeLog);
+          saveBotsState(states);
+        } catch (err: any) {
+          console.error(`[MULTI-BOT REAL TRADE ERROR] Bot "${config.name}" lỗi đặt lệnh:`, err.message || err);
+          state.status = 'IDLE';
+          state.lastActiveMarketId = null;
+          saveBotsState(states);
+        }
       } else {
         console.log(`[MULTI-BOT] 🎯 BOT "${config.name}" (SIMULATOR) CƯỢC ẢO: ${signal.side} $${signal.stake} @ ${(signal.odds * 100).toFixed(1)}% (Lý do: ${signal.reason})`);
         logBotActivity(tradeLog);
@@ -773,19 +814,22 @@ export function resolveMultiBots(result: RoundResult): void {
     // 1. Nếu bot đã cược ở vòng này
     if (state.lastActiveMarketId === result.mtid && state.lastTradeSide && state.lastTradeOdds) {
       const isWin = state.lastTradeSide === result.winner;
-      // Không trừ 2% vì số tiền trong log đã là thực tế sàn
-      const amountOut = 1 / state.lastTradeOdds;
       const bet = state.currentStake;
+      const profit = state.lastTradeShares && state.lastTradeShares > 0
+        ? Number((state.lastTradeShares - bet).toFixed(2))
+        : Number((bet * ((1 / state.lastTradeOdds) - 1)).toFixed(2));
       const isFlat = config.stakeMode === 'FLAT';
       const useLadder = !isFlat && Array.isArray(config.customLadder) && config.customLadder.length > 0;
       const ladder = useLadder ? config.customLadder! : [];
       const maxSteps = isFlat ? 1 : (useLadder ? ladder.length : (config.maxSteps || 2));
       const baseStake = useLadder ? ladder[0] : config.baseStake;
 
+      // Xóa số shares tạm sau khi giải quyết kết quả
+      state.lastTradeShares = undefined;
+
       if (isFlat) {
         // 1. Chế độ Đi đều tay (Flat Bet)
         if (isWin) {
-          const profit = bet * (amountOut - 1);
           state.winCount++;
           state.dailyPnl += profit;
           state.currentStake = baseStake;
@@ -810,7 +854,6 @@ export function resolveMultiBots(result: RoundResult): void {
       } else {
         // 2. Chế độ Gấp thếp (Martingale) hoặc Chuỗi bậc thang (Ladder)
         if (isWin) {
-          const profit = bet * (amountOut - 1);
           state.winCount++;
           state.dailyPnl += profit;
           state.currentStake = baseStake;

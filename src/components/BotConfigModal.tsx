@@ -44,6 +44,7 @@ const DEFAULT_CONFIG: BotConfig = {
   minTimeRemaining: 60,
   maxTimeRemaining: 120,
   minPriceBuffer: 20,
+  maxSlippageBps: 450,
   createdAt: Date.now(),
   updatedAt: Date.now(),
 };
@@ -1063,6 +1064,67 @@ export default function BotConfigModal({
                 />
                 <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 4 }}>
                   Sau khi thua 1 lệnh, nghỉ {config.cooldownRounds} trận để chờ thị trường bình ổn.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* PHẦN 4: KIỂM SOÁT TRƯỢT GIÁ (MAX SLIPPAGE BPS) */}
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.03)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            borderRadius: 12,
+            padding: '16px',
+            marginBottom: 16,
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#f43f5e', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                ⚡ 4. KIỂM SOÁT TRƯỢT GIÁ (SLIPPAGE BPS):
+              </div>
+              <span style={{ fontSize: '0.75rem', color: '#f43f5e', fontWeight: 600 }}>
+                {((config.maxSlippageBps || 450) / 100).toFixed(1)}% trượt giá tối đa
+              </span>
+            </div>
+
+            <div>
+              <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+                {[
+                  { label: '🛡️ 3.0% (300 bps - Chặt chẽ)', val: 300 },
+                  { label: '🎯 4.5% (450 bps - Chuẩn khuyên dùng)', val: 450 },
+                  { label: '⚡ 5.0% (500 bps - Vừa phải)', val: 500 },
+                  { label: '🔓 8.0% (800 bps - Rộng)', val: 800 },
+                ].map((b) => (
+                  <button
+                    key={b.val}
+                    type="button"
+                    onClick={() => handleChange('maxSlippageBps', b.val)}
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: 6,
+                      border: (config.maxSlippageBps || 450) === b.val ? '1px solid #f43f5e' : '1px solid #334155',
+                      background: (config.maxSlippageBps || 450) === b.val ? 'rgba(244, 63, 94, 0.2)' : '#1e293b',
+                      color: (config.maxSlippageBps || 450) === b.val ? '#fb7185' : '#94a3b8',
+                      fontSize: '0.75rem',
+                      cursor: 'pointer',
+                      fontWeight: (config.maxSlippageBps || 450) === b.val ? 700 : 400,
+                    }}
+                  >
+                    {b.label}
+                  </button>
+                ))}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12, alignItems: 'center' }}>
+                <input
+                  type="number"
+                  min={50}
+                  max={2000}
+                  step={50}
+                  value={config.maxSlippageBps || 450}
+                  onChange={(e) => handleChange('maxSlippageBps', Number(e.target.value))}
+                  style={{ width: '100%', background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '8px 10px', color: '#f8fafc' }}
+                />
+                <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
+                  Hạ từ 12% (1200 bps) xuống <strong>{config.maxSlippageBps || 450} bps ({((config.maxSlippageBps || 450) / 100).toFixed(1)}%)</strong> để Binance tự động hủy lệnh cược nếu giá bị đẩy quá đà, tránh bị khớp giá xấu chỉ ăn payout bèo!
                 </div>
               </div>
             </div>

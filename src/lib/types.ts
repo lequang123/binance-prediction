@@ -339,6 +339,7 @@ export interface BotConfig {
   minTimeRemaining: number;        // Chặn giây cuối (mặc định: 35s)
   maxTimeRemaining: number;        // Chặn vào quá sớm (mặc định: 240s)
   minPriceBuffer: number;          // Đệm giá an toàn tối thiểu (mặc định: $20)
+  maxSlippageBps?: number;         // Mức trượt giá tối đa (ví dụ: 450 = 4.5%, 500 = 5.0%)
 
   createdAt: number;
   updatedAt: number;
@@ -359,6 +360,7 @@ export interface BotRuntimeState {
   status: 'IDLE' | 'IN_TRADE' | 'COOLDOWN' | 'STOPPED_MAX_LOSS';
   lastTradeSide?: 'Up' | 'Down';
   lastTradeOdds?: number;
+  lastTradeShares?: number;
   lastDayUTC?: number;
 }
 
@@ -404,6 +406,8 @@ export interface BotTradeLog {
   status: 'PENDING' | 'WIN' | 'LOSS';
   pnl: number;
   orderId?: string;
+  shares?: number;
+  fillPrice?: number;
 }
 
 

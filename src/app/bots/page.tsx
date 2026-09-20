@@ -520,11 +520,11 @@ export default function BotsStudioPage() {
                   <th style={{ padding: '8px 12px' }}>Tên Bot</th>
                   <th style={{ padding: '8px 12px' }}>Mã Kỳ</th>
                   <th style={{ padding: '8px 12px' }}>Cửa Cược</th>
-                  <th style={{ padding: '8px 12px' }}>Odds</th>
+                  <th style={{ padding: '8px 12px' }}>Odds / Khớp Thực Tế</th>
                   <th style={{ padding: '8px 12px' }}>Tiền Cược</th>
                   <th style={{ padding: '8px 12px' }}>Chế Độ</th>
                   {historyMode === 'REAL_TRADE' && <th style={{ padding: '8px 12px' }}>OrderID Binance</th>}
-                  <th style={{ padding: '8px 12px' }}>Trạng Thái &amp; PnL</th>
+                  <th style={{ padding: '8px 12px' }}>Trạng Thái &amp; PnL Thực Nhận</th>
                 </tr>
               </thead>
               <tbody>
@@ -548,7 +548,16 @@ export default function BotsStudioPage() {
                         {log.side}
                       </span>
                     </td>
-                    <td style={{ padding: '10px 12px' }}>{(log.odds * 100).toFixed(1)}%</td>
+                    <td style={{ padding: '10px 12px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <span style={{ fontWeight: 600 }}>{(log.odds * 100).toFixed(1)}%</span>
+                        {log.shares ? (
+                          <span style={{ fontSize: '0.7rem', color: '#38bdf8', fontWeight: 500 }}>
+                            ({log.shares.toFixed(2)} shares)
+                          </span>
+                        ) : null}
+                      </div>
+                    </td>
                     <td style={{ padding: '10px 12px', fontWeight: 700 }}>${log.stake}</td>
                     <td style={{ padding: '10px 12px' }}>
                       <span style={{
@@ -570,10 +579,10 @@ export default function BotsStudioPage() {
                     <td style={{ padding: '10px 12px' }}>
                       <span style={{
                         color: log.status === 'WIN' ? '#4ade80' : log.status === 'LOSS' ? '#f87171' : '#facc15',
-                        fontWeight: 600,
+                        fontWeight: 700,
                       }}>
                         {log.status === 'WIN'
-                          ? `🏆 Thắng (+${log.pnl ? log.pnl.toFixed(2) : ((log.stake * (1 / log.odds - 1)).toFixed(2))}$)`
+                          ? `🏆 Thắng (+${log.pnl !== undefined && log.pnl !== null ? log.pnl.toFixed(2) : ((log.stake * (1 / log.odds - 1)).toFixed(2))}$)`
                           : log.status === 'LOSS'
                             ? `❌ Thua (-$${log.stake})`
                             : '⏳ Đang chờ kết quả'}

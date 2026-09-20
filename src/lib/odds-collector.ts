@@ -5,6 +5,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { OddsSnapshot, RoundResult, RoundOddsBucketEntry } from './types';
+import { tickMultiBots, resolveMultiBots } from './bot-engine';
+import { getPredictionQuote, WALLET_ADDRESS } from './trade-api';
 
 const EVENT_SLUG = 'btc-up-or-down-5m';
 const POLL_INTERVAL_MS = 300;
@@ -19,6 +21,7 @@ const HEADERS: Record<string, string> = {
   'content-type': 'application/json',
   'user-agent':
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36',
+  'connection': 'keep-alive',
 };
 
 // ── Global Singleton State (Persists across Next.js HMR / reloads) ──
@@ -169,7 +172,7 @@ async function fetchEventDetail(): Promise<{
       method: 'POST',
       headers: HEADERS,
       body: JSON.stringify({ eventSlug: EVENT_SLUG }),
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(2000),
     });
     const json = (await res.json()) as any;
     if (!json.success || !json.data) return null;
@@ -200,7 +203,6 @@ async function fetchRealtimeQuoteForEntry(
   logDir?: string
 ): Promise<void> {
   try {
-    const { getPredictionQuote, WALLET_ADDRESS } = await import('./trade-api');
     const ONE_USD_WEI = '1000000000000000000';
 
     // Gọi song song cả 2 cửa: Favorite và Đảo chiều (Underdog)
@@ -238,7 +240,7 @@ async function fetchRoundResult(marketTopicId: number): Promise<RoundResult | nu
       method: 'POST',
       headers: HEADERS,
       body: JSON.stringify({ marketTopicId }),
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(3000),
     });
     const json = (await res.json()) as any;
     if (!json.data) return null;
@@ -293,12 +295,12 @@ async function pollOnce(): Promise<void> {
       // 2. Giữ lại tối đa 5 kỳ gần nhất trong file snapshot và RAM để trace
       pruneOldSnapshotsLog(detail.marketTopicId);
 
-      // 3. 🎁 Tự động Redeem All các vị thế thắng khi sang Kỳ mới
-      import('./trade-api').then(({ redeemAllWinningPositions }) => {
-        redeemAllWinningPositions().catch((err) =>
-          console.error('[AUTO REDEEM ERROR]:', err?.message || err)
-        );
-      });
+      // // 3. 🎁 Tự động Redeem All các vị thế thắng khi sang Kỳ mới
+      // import('./trade-api').then(({ redeemAllWinningPositions }) => {
+      //   redeemAllWinningPositions().catch((err) =>
+      //     console.error('[AUTO REDEEM ERROR]:', err?.message || err)
+      //   );
+      // });
     }
 
     if (state.currentMarketTopicId === null) {
@@ -319,14 +321,14 @@ async function pollOnce(): Promise<void> {
     snapshots.push(snapshot);
     state.snapshotCount++;
 
-    // Write snapshot to file (chỉ chứa snapshots của các kỳ gần nhất)
+    // Throttle ghi snapshot vào đĩa (~1s một lần) để giảm 66% thao tác I/O đồng bộ trên đĩa
     const logDir = ensureLogDir();
-    appendToFile(path.join(logDir, 'odds_snapshots.jsonl'), snapshot);
+    if (state.snapshotCount % 3 === 0) {
+      appendToFile(path.join(logDir, 'odds_snapshots.jsonl'), snapshot);
+    }
 
-    // 🤖 ĐIỀU PHỐI MULTI-BOT RUNNER (Tự động cược Simulator hoặc Real Trade theo config)
-    import('./bot-engine').then(({ tickMultiBots }) => {
-      tickMultiBots(snapshot, detail).catch((e) => console.error('[BOT RUNNER ERROR]:', e));
-    });
+    // 🤖 ĐIỀU PHỐI MULTI-BOT RUNNER (Gọi trực tiếp, không dynamic import mỗi 300ms)
+    tickMultiBots(snapshot, detail).catch((e) => console.error('[BOT RUNNER ERROR]:', e));
 
     // First-touch dedup: record bucket entry only once per round
     const favoriteOdds = Math.max(detail.upPrice, detail.downPrice);
@@ -390,9 +392,7 @@ async function resolveRound(marketTopicId: number): Promise<void> {
       );
 
       // 🤖 BÁO KẾT QUẢ CHO MULTI-BOTS (Để cập nhật Win/Loss, Cooldown, Reset/Gấp thếp)
-      import('./bot-engine').then(({ resolveMultiBots }) => {
-        resolveMultiBots(result);
-      });
+      resolveMultiBots(result);
 
       return;
     }
