@@ -377,11 +377,15 @@ export interface BacktestTradeItem {
   stake: number;
   side: 'Up' | 'Down';
   odds: number;
+  fillPrice?: number;
+  quotePayout?: number; // Actual amountOut per $1 from Binance quote if available
   winner: 'Up' | 'Down';
   isWin: boolean;
   pnl: number;
   balanceAfter: number;
   actionNote: string;
+  status?: 'WIN' | 'LOSS' | 'SKIPPED';
+  skipReason?: string;
 }
 
 export interface BacktestResult {
@@ -389,12 +393,66 @@ export interface BacktestResult {
   tradesCount: number;
   wins: number;
   losses: number;
+  skippedCount?: number;
   winRate: number;
   netPnl: number;
+  roiPct?: number;
+  initialBalance?: number;
+  finalBalance?: number;
+  peakBalance?: number;
   maxDrawdown: number;
+  maxDrawdownPct?: number;
   cutLossCount: number;
+  dailyLossStops?: number;
+  maxWinStreak?: number;
+  maxLossStreak?: number;
+  avgProfitPerWin?: number;
+  avgLossPerLoss?: number;
   rating: 'EXCELLENT' | 'BALANCED' | 'HIGH_RISK';
   trades?: BacktestTradeItem[];
+}
+
+export interface RealisticBacktestOptions {
+  roundLimit?: number;          // Total available or 100, 200, 500
+  initialBalance?: number;      // Default 1000
+  simulateSlippage?: boolean;   // Apply slippage simulation
+  slippageBps?: number;         // Basis points, e.g. 450 (4.5%)
+}
+
+export interface BacktestRunRecord {
+  id: string;                   // bt_run_xxxx
+  botId: string;
+  botName: string;
+  configSnapshot: BotConfig;
+  executedAt: number;
+  datasetScope: {
+    totalRoundsAvailable: number;
+    roundsTested: number;
+    rangeLabel: string;
+    initialBalance: number;
+    simulateSlippage: boolean;
+  };
+  summary: {
+    tradesCount: number;
+    wins: number;
+    losses: number;
+    skippedCount: number;
+    winRate: number;
+    netPnl: number;
+    roiPct: number;
+    finalBalance: number;
+    peakBalance: number;
+    maxDrawdown: number;
+    maxDrawdownPct: number;
+    cutLossCount: number;
+    dailyLossStops: number;
+    maxWinStreak: number;
+    maxLossStreak: number;
+    avgProfitPerWin: number;
+    avgLossPerLoss: number;
+    rating: 'EXCELLENT' | 'BALANCED' | 'HIGH_RISK';
+  };
+  trades: BacktestTradeItem[];
 }
 
 export interface BotTradeLog {

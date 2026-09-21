@@ -14,6 +14,7 @@ import type {
   RoundOddsBucketEntry,
   OddsSnapshot,
   TradingSession,
+  RealisticBacktestOptions,
 } from './types';
 import { getTradingSession } from './odds-stats';
 
@@ -375,7 +376,8 @@ export function computeBotModeStats(botId: string, mode: 'REAL_TRADE' | 'SIMULAT
 export function runBotBacktest(
   config: BotConfig,
   results: RoundResult[],
-  entries: RoundOddsBucketEntry[]
+  entries: RoundOddsBucketEntry[],
+  options?: RealisticBacktestOptions
 ): BacktestResult {
   if (results.length === 0 || entries.length === 0) {
     return {
@@ -383,27 +385,46 @@ export function runBotBacktest(
       tradesCount: 0,
       wins: 0,
       losses: 0,
+      skippedCount: 0,
       winRate: 0,
       netPnl: 0,
+      roiPct: 0,
+      initialBalance: options?.initialBalance || 1000,
+      finalBalance: options?.initialBalance || 1000,
+      peakBalance: options?.initialBalance || 1000,
       maxDrawdown: 0,
+      maxDrawdownPct: 0,
       cutLossCount: 0,
+      dailyLossStops: 0,
+      maxWinStreak: 0,
+      maxLossStreak: 0,
+      avgProfitPerWin: 0,
+      avgLossPerLoss: 0,
       rating: 'BALANCED',
     };
   }
 
-  // Sắp xếp các round theo thứ tự thời gian
-  const sortedResults = [...results].sort((a, b) => (a.startDate || 0) - (b.startDate || 0));
+  // Sắp xếp các round theo thứ tự thời gian tăng dần
+  let sortedResults = [...results].sort((a, b) => (a.startDate || 0) - (b.startDate || 0));
 
-  // Gom các entry theo mtid
+  // Giới hạn số kỳ nếu có chỉ định (lấy N kỳ gần nhất)
+  if (options?.roundLimit && options.roundLimit > 0 && sortedResults.length > options.roundLimit) {
+    sortedResults = sortedResults.slice(-options.roundLimit);
+  }
+
+  // Gom các entry theo mtid và sắp xếp theo thời gian xuất hiện ts tăng dần
   const entriesByRound = new Map<number, RoundOddsBucketEntry[]>();
   for (const e of entries) {
     const list = entriesByRound.get(e.mtid) || [];
     list.push(e);
     entriesByRound.set(e.mtid, list);
   }
+  for (const list of entriesByRound.values()) {
+    list.sort((a, b) => (a.ts || 0) - (b.ts || 0));
+  }
 
-  let balance = 1000;
-  const initialBalance = balance;
+  const initialBalance = options?.initialBalance && options.initialBalance > 0 ? options.initialBalance : 1000;
+  let balance = initialBalance;
   const isFlat = config.stakeMode === 'FLAT';
   const useLadder = !isFlat && Array.isArray(config.customLadder) && config.customLadder.length > 0;
   const ladder = useLadder ? config.customLadder! : [];
@@ -413,15 +434,26 @@ export function runBotBacktest(
   let step = 1;
   let wins = 0;
   let losses = 0;
+  let skippedCount = 0;
   let cutLossCount = 0;
+  let dailyLossStops = 0;
   let maxDrawdown = 0;
   let peakBalance = balance;
   let dailyLoss = 0;
   let currentDay = -1;
+  let dayStopped = false;
+
+  let currentWinStreak = 0;
+  let maxWinStreak = 0;
+  let currentLossStreak = 0;
+  let maxLossStreak = 0;
+  let totalWinProfit = 0;
+  let totalLossAmount = 0;
+
   const tradesHistory: BacktestTradeItem[] = [];
 
   for (const round of sortedResults) {
-    // Kiểm tra phiên nếu có cấu hình
+    // 1. Kiểm tra phiên nếu có cấu hình
     if (!config.sessions.includes('all')) {
       const session = getTradingSession(round.startDate || round.endDate);
       if (!config.sessions.includes(session)) {
@@ -429,15 +461,20 @@ export function runBotBacktest(
       }
     }
 
-    // Reset daily loss khi qua ngày mới
+    // 2. Reset daily loss khi bước sang ngày UTC mới
     const roundDay = new Date(round.startDate || 0).getUTCDate();
     if (roundDay !== currentDay) {
       currentDay = roundDay;
       dailyLoss = 0;
+      dayStopped = false;
     }
 
-    // Kiểm tra giới hạn Max Daily Loss
+    // 3. Kiểm tra giới hạn Max Daily Loss (Dừng cho đến hết ngày UTC)
     if (config.maxDailyLoss > 0 && dailyLoss >= config.maxDailyLoss) {
+      if (!dayStopped) {
+        dayStopped = true;
+        dailyLossStops++;
+      }
       continue;
     }
 
@@ -452,15 +489,19 @@ export function runBotBacktest(
     let targetOdds = 0;
 
     if (config.strategy === 'TRAP_TRADERS') {
-      // 🪤 BOT LOẠI 2: BACKTEST RIÊNG CHO SĂN BẪY TRADER (TRAP TRADERS)
-      // Điều kiện:
-      // 1. Phút 5-2m (tr > 60s): Có bên đạt đỉnh Odds >= trapPeakOddsMin (80%, 85%, 90%)
-      // 2. Phút 1-0m (tr <= 60s): Giá nến đảo chiều vượt StartPrice >= trapMinPriceReversal ($15)
-      // 3. Odds cửa mới <= trapMaxOdds (85%)
-      const earlyEntries = roundEntries.filter((re) => re.minuteBucket !== '1-0m');
+      // 🪤 BOT SĂN BẪY TRADER (TRAP TRADERS)
+      const targetMins = Array.isArray(config.targetMinutes) && config.targetMinutes.length > 0
+        ? config.targetMinutes
+        : ['1-0m'];
+      const targetMinSet = new Set(targetMins);
+
+      // Các phút ban đầu (trước phút kích hoạt đảo chiều) để rà soát đỉnh Odds
+      const earlyEntries = roundEntries.filter((re) => !targetMinSet.has(re.minuteBucket as any));
+      const poolForPeak = earlyEntries.length > 0 ? earlyEntries : roundEntries.filter((re) => re.minuteBucket !== '1-0m');
+
       let maxEarly = 0;
       let peakSide: 'Up' | 'Down' = 'Up';
-      for (const ee of earlyEntries) {
+      for (const ee of poolForPeak) {
         if (ee.favoriteOdds > maxEarly) {
           maxEarly = ee.favoriteOdds;
           peakSide = ee.favoriteSide;
@@ -470,46 +511,65 @@ export function runBotBacktest(
       const minPeak = config.trapPeakOddsMin || 0.90;
       if (maxEarly >= minPeak) {
         const newSide: 'Up' | 'Down' = peakSide === 'Up' ? 'Down' : 'Up';
-        const priceDelta = (round.endPrice || 0) - (round.startPrice || 0);
-        const newSideDelta = newSide === 'Up' ? priceDelta : -priceDelta;
-        const minDelta = config.trapMinPriceReversal || 15;
+        // ⚠️ Tuyệt đối không dùng round.endPrice để lọc trước kết quả (tránh lookahead bias)
+        // Tìm entry đảo chiều tại đúng các khung phút targetMinutes mà người dùng cấu hình
+        const lateEntry = roundEntries.find((re) => targetMinSet.has(re.minuteBucket as any) && re.favoriteSide === newSide);
+        if (lateEntry) {
+          const favPct = Math.round(lateEntry.favoriteOdds * 100);
+          let bucket = lateEntry.oddsBucket;
+          if (!bucket) {
+            if (favPct >= 95) bucket = '95+';
+            else if (favPct >= 90) bucket = '90-95';
+            else if (favPct >= 85) bucket = '85-90';
+            else if (favPct >= 80) bucket = '80-85';
+            else if (favPct >= 75) bucket = '75-80';
+            else if (favPct >= 70) bucket = '70-75';
+            else if (favPct >= 65) bucket = '65-70';
+            else if (favPct >= 60) bucket = '60-65';
+            else if (favPct >= 55) bucket = '55-60';
+            else bucket = '50-55';
+          }
 
-        if (newSideDelta >= minDelta) {
-          const lateEntry = roundEntries.find((re) => re.minuteBucket === '1-0m' && re.favoriteSide === newSide);
-          const odds = lateEntry ? lateEntry.favoriteOdds : 0.72;
-          const maxOdds = config.trapMaxOdds || 0.85;
+          const hasTargetBuckets = Array.isArray(config.targetOddsBuckets) && config.targetOddsBuckets.length > 0;
+          const bucketMatch = hasTargetBuckets ? config.targetOddsBuckets!.includes(bucket) : true;
+          const odds = lateEntry.favoriteOdds;
+          const maxOdds = config.trapMaxOdds || config.oddsMax || 0.85;
+          const minOdds = config.oddsMin || 0.50;
 
-          if (odds <= maxOdds) {
-            matchedEntry = lateEntry || earlyEntries[0];
+          if (odds <= maxOdds && odds >= minOdds && bucketMatch) {
+            matchedEntry = lateEntry;
             targetSide = newSide;
             targetOdds = odds;
           }
         }
       }
     } else {
-      // 🛡️ BOT LOẠI 1: BACKTEST CHO BOT THÔNG THƯỜNG (CỬA THUẬN FAVORITE / UNDERDOG)
+      // 🛡️ BOT THÔNG THƯỜNG (CỬA THUẬN FAVORITE / UNDERDOG / EV_SNIPER)
       for (const e of roundEntries) {
         // 1. Lọc phút
         if (Array.isArray(config.targetMinutes) && config.targetMinutes.length > 0) {
           const allowedMinutes = new Set(config.targetMinutes);
-          if (config.minTimeRemaining !== undefined && config.maxTimeRemaining !== undefined) {
-            if (config.maxTimeRemaining > 240 && config.minTimeRemaining < 300) allowedMinutes.add('5-4m');
-            if (config.maxTimeRemaining > 180 && config.minTimeRemaining < 240) allowedMinutes.add('4-3m');
-            if (config.maxTimeRemaining > 120 && config.minTimeRemaining < 180) allowedMinutes.add('3-2m');
-            if (config.maxTimeRemaining > 60 && config.minTimeRemaining < 120) allowedMinutes.add('2-1m');
-            if (config.minTimeRemaining < 60) allowedMinutes.add('1-0m');
-          }
+          if (!allowedMinutes.has(e.minuteBucket as any)) continue;
+        } else if (config.minTimeRemaining !== undefined && config.maxTimeRemaining !== undefined) {
+          const allowedMinutes = new Set<string>();
+          if (config.maxTimeRemaining > 240 && config.minTimeRemaining < 300) allowedMinutes.add('5-4m');
+          if (config.maxTimeRemaining > 180 && config.minTimeRemaining < 240) allowedMinutes.add('4-3m');
+          if (config.maxTimeRemaining > 120 && config.minTimeRemaining < 180) allowedMinutes.add('3-2m');
+          if (config.maxTimeRemaining > 60 && config.minTimeRemaining < 120) allowedMinutes.add('2-1m');
+          if (config.minTimeRemaining < 60) allowedMinutes.add('1-0m');
           if (!allowedMinutes.has(e.minuteBucket as any)) continue;
         }
 
-        // 2. Lọc thời gian giây
-        const timeRemaining = e.minuteBucket === '5-4m' ? 270 :
-          e.minuteBucket === '4-3m' ? 210 :
-            e.minuteBucket === '3-2m' ? 150 :
-              e.minuteBucket === '2-1m' ? 90 : 45;
+        // 2. Lọc thời gian giây (chỉ áp dụng nếu không dùng targetMinutes)
+        if (!config.targetMinutes || config.targetMinutes.length === 0) {
+          const timeRemaining = e.minuteBucket === '5-4m' ? 270 :
+            e.minuteBucket === '4-3m' ? 210 :
+              e.minuteBucket === '3-2m' ? 150 :
+                e.minuteBucket === '2-1m' ? 90 : 45;
 
-        if (timeRemaining < config.minTimeRemaining) continue;
-        if (timeRemaining > config.maxTimeRemaining) continue;
+          if (timeRemaining < config.minTimeRemaining) continue;
+          if (timeRemaining > config.maxTimeRemaining) continue;
+        }
 
         // 3. Mốc Odds
         const favPct = Math.round(e.favoriteOdds * 100);
@@ -561,20 +621,36 @@ export function runBotBacktest(
         }
       }
 
-      // 4. Lọc đệm giá an toàn
-      if (matchedEntry && config.minPriceBuffer > 0) {
-        const priceDiff = Math.abs((round.endPrice || 0) - (round.startPrice || 0));
-        if (priceDiff < config.minPriceBuffer) {
-          matchedEntry = null;
-        }
-      }
+      // ⚠️ Gỡ bỏ hoàn toàn việc dùng round.endPrice để lọc đệm giá.
+      // Khi backtest, bot phải chịu đựng các pha rút râu / đảo chiều nến giống hệt 100% như khi trade thật.
     }
 
     if (!matchedEntry || targetOdds <= 0) continue;
-    const isWin = targetSide === round.winner;
 
-    // Tính kết quả lệnh (không trừ 2% vì số tiền trong log đã là thực tế)
-    const amountOut = 1 / targetOdds;
+    // ═══════════════════════════════════════════════════════════════════
+    // MÔ PHỎNG KHỚP LỆNH THỰC TẾ (REAL BINANCE QUOTE & SLIPPAGE)
+    // ═══════════════════════════════════════════════════════════════════
+    let amountOut = 1 / targetOdds;
+    let actualQuoteUsed = false;
+
+    // Kiểm tra xem trong log có báo giá thực tế favAmountOut / undAmountOut từ Binance API hay không
+    if (targetSide === matchedEntry.favoriteSide && matchedEntry.favAmountOut && matchedEntry.favAmountOut > 0) {
+      amountOut = matchedEntry.favAmountOut;
+      actualQuoteUsed = true;
+    } else if (targetSide !== matchedEntry.favoriteSide && matchedEntry.undAmountOut && matchedEntry.undAmountOut > 0) {
+      amountOut = matchedEntry.undAmountOut;
+      actualQuoteUsed = true;
+    }
+
+    // Nếu không có báo giá thực tế từ API và bật mô phỏng trượt giá:
+    if (!actualQuoteUsed && options?.simulateSlippage) {
+      const slippageBps = options.slippageBps ?? config.maxSlippageBps ?? 450;
+      const slipFactor = 1 - slippageBps / 10000;
+      // Trượt giá làm giảm payout thực nhận
+      amountOut = 1 + Math.max(0, (amountOut - 1) * slipFactor);
+    }
+
+    const isWin = targetSide === round.winner;
     const bet = stake;
     const currentStep = step;
     let pnl = 0;
@@ -584,12 +660,22 @@ export function runBotBacktest(
       // 1. Chế độ Đi đều tay (Flat Bet)
       if (isWin) {
         wins++;
+        currentWinStreak++;
+        if (currentWinStreak > maxWinStreak) maxWinStreak = currentWinStreak;
+        currentLossStreak = 0;
+
         pnl = bet * (amountOut - 1);
+        totalWinProfit += pnl;
         balance += pnl;
         actionNote = `✅ Thắng (+${pnl.toFixed(2)}$) -> Giữ đều $${stake}`;
       } else {
         losses++;
+        currentLossStreak++;
+        if (currentLossStreak > maxLossStreak) maxLossStreak = currentLossStreak;
+        currentWinStreak = 0;
+
         pnl = -bet;
+        totalLossAmount += bet;
         balance -= bet;
         dailyLoss += bet;
         actionNote = `❌ Thua (-$${bet}) -> Tiếp tục đánh đều $${stake}`;
@@ -598,20 +684,30 @@ export function runBotBacktest(
       // 2. Chế độ Gấp thếp (Martingale) hoặc Chuỗi vốn (Ladder)
       if (isWin) {
         wins++;
+        currentWinStreak++;
+        if (currentWinStreak > maxWinStreak) maxWinStreak = currentWinStreak;
+        currentLossStreak = 0;
+
         pnl = bet * (amountOut - 1);
+        totalWinProfit += pnl;
         balance += pnl;
         stake = useLadder ? ladder[0] : config.baseStake;
         step = 1;
         actionNote = currentStep > 1 ? `✅ Thắng B${currentStep} -> Reset về B1 ($${stake})` : `Thắng B1 -> Giữ B1 ($${stake})`;
       } else {
         losses++;
+        currentLossStreak++;
+        if (currentLossStreak > maxLossStreak) maxLossStreak = currentLossStreak;
+        currentWinStreak = 0;
+
         pnl = -bet;
+        totalLossAmount += bet;
         balance -= bet;
         dailyLoss += bet;
 
         if (step < maxSteps) {
           step++;
-          stake = useLadder ? ladder[step - 1] : config.baseStake * Math.pow(multiplier, step - 1);
+          stake = useLadder ? ladder[step - 1] : Number((config.baseStake * Math.pow(multiplier, step - 1)).toFixed(2));
           actionNote = `❌ Thua B${currentStep} -> Lên B${step} ($${stake})`;
         } else {
           // Cắt lỗ khi chạm số bước tối đa
@@ -631,8 +727,11 @@ export function runBotBacktest(
       stake: bet,
       side: targetSide,
       odds: Number(targetOdds.toFixed(2)),
+      quotePayout: Number(amountOut.toFixed(4)),
+      fillPrice: Number((1 / amountOut).toFixed(4)),
       winner: round.winner,
       isWin,
+      status: isWin ? 'WIN' : 'LOSS',
       pnl: Number(pnl.toFixed(2)),
       balanceAfter: Number(balance.toFixed(2)),
       actionNote,
@@ -646,6 +745,10 @@ export function runBotBacktest(
   const totalTrades = wins + losses;
   const winRate = totalTrades > 0 ? (wins / totalTrades) * 100 : 0;
   const netPnl = balance - initialBalance;
+  const roiPct = initialBalance > 0 ? (netPnl / initialBalance) * 100 : 0;
+  const maxDrawdownPct = peakBalance > 0 ? (maxDrawdown / peakBalance) * 100 : 0;
+  const avgProfitPerWin = wins > 0 ? totalWinProfit / wins : 0;
+  const avgLossPerLoss = losses > 0 ? totalLossAmount / losses : 0;
 
   let rating: 'EXCELLENT' | 'BALANCED' | 'HIGH_RISK' = 'BALANCED';
   if (netPnl > 30 && winRate >= 80 && maxDrawdown < 150) {
@@ -659,10 +762,21 @@ export function runBotBacktest(
     tradesCount: totalTrades,
     wins,
     losses,
+    skippedCount,
     winRate: Number(winRate.toFixed(1)),
     netPnl: Number(netPnl.toFixed(2)),
+    roiPct: Number(roiPct.toFixed(1)),
+    initialBalance,
+    finalBalance: Number(balance.toFixed(2)),
+    peakBalance: Number(peakBalance.toFixed(2)),
     maxDrawdown: Number(maxDrawdown.toFixed(2)),
+    maxDrawdownPct: Number(maxDrawdownPct.toFixed(1)),
     cutLossCount,
+    dailyLossStops,
+    maxWinStreak,
+    maxLossStreak,
+    avgProfitPerWin: Number(avgProfitPerWin.toFixed(2)),
+    avgLossPerLoss: Number(avgLossPerLoss.toFixed(2)),
     rating,
     trades: tradesHistory,
   };
@@ -1050,7 +1164,7 @@ export async function tickMultiBots(
           const slippageBps = config.maxSlippageBps || 450;
           const res = await executeLiveTrade(tokenId, 'BUY', amountInWei, signal.odds, slippageBps);
           tradeLog.orderId = res?.orderId || res?.orderResult?.data?.orderId || res?.orderResult?.orderId || res?.data?.orderId;
-          
+
           if (res?.isFailed) {
             console.warn(`[MULTI-BOT] ⚠️ Lệnh #${tradeLog.orderId} bị sàn Binance từ chối khớp (${res.failReason}), đánh dấu SKIPPED!`);
             tradeLog.status = 'SKIPPED';

@@ -6,16 +6,20 @@ import type { BotConfig, BotRuntimeState } from '@/lib/types';
 interface BotCardProps {
   config: BotConfig;
   state?: BotRuntimeState;
+  latestBacktestSummary?: { winRate: number; netPnl: number; executedAt: number };
   onUpdate: (updatedConfig: BotConfig) => Promise<void>;
   onEdit: (config: BotConfig) => void;
+  onExecuteBacktest?: (config: BotConfig) => void;
   onDelete: (id: string) => Promise<void>;
 }
 
 export default function BotCard({
   config,
   state,
+  latestBacktestSummary,
   onUpdate,
   onEdit,
+  onExecuteBacktest,
   onDelete,
 }: BotCardProps) {
   const [updating, setUpdating] = useState(false);
@@ -249,6 +253,29 @@ export default function BotCard({
             </>
           )}
         </div>
+
+        {/* Latest Backtest Summary Badge (nếu có) */}
+        {latestBacktestSummary && (
+          <div style={{
+            background: 'rgba(59, 130, 246, 0.08)',
+            border: '1px solid rgba(59, 130, 246, 0.25)',
+            borderRadius: 8,
+            padding: '6px 10px',
+            fontSize: '0.72rem',
+            color: '#93c5fd',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 12,
+          }}>
+            <span>
+              🧪 Test gần nhất: <strong style={{ color: latestBacktestSummary.winRate >= 80 ? '#4ade80' : '#facc15' }}>{latestBacktestSummary.winRate}% Win</strong> ({latestBacktestSummary.netPnl >= 0 ? '+' : ''}${latestBacktestSummary.netPnl.toFixed(2)})
+            </span>
+            <span style={{ fontSize: '0.66rem', color: '#64748b' }}>
+              {new Date(latestBacktestSummary.executedAt).toLocaleDateString('vi-VN')}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Action Footer */}
@@ -316,23 +343,46 @@ export default function BotCard({
           </button>
         </div>
 
-        {/* Edit & Delete Buttons */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <button
-            type="button"
-            onClick={() => onEdit(config)}
-            style={{
-              background: 'transparent',
-              border: '1px solid #334155',
-              color: '#cbd5e1',
-              padding: '6px 12px',
-              borderRadius: 6,
-              fontSize: '0.75rem',
-              cursor: 'pointer',
-            }}
-          >
-            ✏️ Chỉnh sửa / Thẩm định
-          </button>
+        {/* Action Buttons: Execute Backtest, Edit, Delete */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              type="button"
+              onClick={() => onExecuteBacktest?.(config)}
+              style={{
+                background: 'rgba(59, 130, 246, 0.15)',
+                border: '1px solid rgba(59, 130, 246, 0.35)',
+                color: '#60a5fa',
+                padding: '6px 10px',
+                borderRadius: 6,
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+              }}
+              title="Thực thi kiểm thử bot trên tập dữ liệu lịch sử và lưu kết quả"
+            >
+              🧪 Chạy Data Cũ
+            </button>
+            <button
+              type="button"
+              onClick={() => onEdit(config)}
+              style={{
+                background: 'transparent',
+                border: '1px solid #334155',
+                color: '#cbd5e1',
+                padding: '6px 10px',
+                borderRadius: 6,
+                fontSize: '0.75rem',
+                cursor: 'pointer',
+              }}
+            >
+              ✏️ Sửa
+            </button>
+          </div>
+
           <button
             type="button"
             onClick={() => {

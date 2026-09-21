@@ -21,76 +21,53 @@
     "targetMinutes": [
       "1-0m"
     ],
-    "minTimeRemaining": 10,
+    "minTimeRemaining": 35,
     "maxTimeRemaining": 60,
     "minPriceBuffer": 15,
     "maxSlippageBps": 600,
     "createdAt": 1789901000000,
-    "updatedAt": 1789908416134,
+    "updatedAt": 1790002157634,
     "targetOddsBuckets": [
       "85-90",
-      "80-85",
       "90-95",
-      "95+"
+      "80-85",
+      "75-80"
     ]
   },
   {
     "id": "bot_flat_2_1m",
-    "name": "🛡️ Bot Đánh Đều Phút 2-1m (Win 95.0%)",
+    "name": "🛡️ Bot 1, 6, 15, 40",
     "enabled": true,
-    "mode": "REAL_TRADE",
+    "mode": "SIMULATOR",
     "strategy": "MARTINGALE_FAVORITE",
-    "stakeMode": "MARTINGALE",
+    "stakeMode": "CUSTOM_LADDER",
     "baseStake": 1,
-    "multiplier": 2,
-    "maxSteps": 2,
-    "maxDailyLoss": 50,
+    "multiplier": 1,
+    "maxSteps": 3,
+    "maxDailyLoss": 65,
     "oddsMin": 0.85,
     "oddsMax": 0.9,
     "sessions": [
       "all"
     ],
-    "minTimeRemaining": 20,
+    "minTimeRemaining": 60,
     "maxTimeRemaining": 120,
-    "minPriceBuffer": 30,
+    "minPriceBuffer": 15,
     "maxSlippageBps": 500,
     "createdAt": 1789875319746,
-    "updatedAt": 1789900044145,
+    "updatedAt": 1790003140560,
     "targetOddsBuckets": [
-      "85-90",
-      "80-85"
+      "75-80",
+      "80-85",
+      "70-75"
     ],
     "targetMinutes": [
       "2-1m"
-    ]
-  },
-  {
-    "id": "bot_flat_1_0m",
-    "name": "⚡ Bot Đánh Đều Phút 1-0m (Win 91.4%)",
-    "enabled": false,
-    "mode": "SIMULATOR",
-    "strategy": "MARTINGALE_FAVORITE",
-    "stakeMode": "FLAT",
-    "baseStake": 1,
-    "multiplier": 1,
-    "maxSteps": 1,
-    "maxDailyLoss": 50,
-    "oddsMin": 0.85,
-    "oddsMax": 0.9,
-    "sessions": [
-      "all"
     ],
-    "minTimeRemaining": 35,
-    "maxTimeRemaining": 60,
-    "minPriceBuffer": 20,
-    "maxSlippageBps": 450,
-    "createdAt": 1789875319746,
-    "updatedAt": 1789875319746,
-    "targetOddsBuckets": [
-      "85-90"
-    ],
-    "targetMinutes": [
-      "1-0m"
+    "customLadder": [
+      1,
+      6,
+      15
     ]
   },
   {
@@ -101,7 +78,7 @@
     "strategy": "MARTINGALE_FAVORITE",
     "stakeMode": "CUSTOM_LADDER",
     "baseStake": 1,
-    "multiplier": 4,
+    "multiplier": 1,
     "maxSteps": 4,
     "customLadder": [
       1,
@@ -115,65 +92,54 @@
     "sessions": [
       "all"
     ],
-    "minTimeRemaining": 35,
-    "maxTimeRemaining": 240,
+    "minTimeRemaining": 20,
+    "maxTimeRemaining": 120,
     "minPriceBuffer": 20,
     "createdAt": 1789875319746,
-    "updatedAt": 1789875319746
-  },
-  {
-    "id": "bot_martingale_85_90",
-    "name": "🎯 Bot Gấp Thếp 85-90% An Toàn (2 Bước)",
-    "enabled": false,
-    "mode": "SIMULATOR",
-    "strategy": "MARTINGALE_FAVORITE",
-    "stakeMode": "MARTINGALE",
-    "baseStake": 10,
-    "multiplier": 4,
-    "maxSteps": 2,
-    "maxDailyLoss": 100,
-    "oddsMin": 0.85,
-    "oddsMax": 0.9,
-    "sessions": [
-      "all"
+    "updatedAt": 1790001312807,
+    "targetOddsBuckets": [
+      "85-90",
+      "80-85"
     ],
-    "minTimeRemaining": 35,
-    "maxTimeRemaining": 240,
-    "minPriceBuffer": 20,
-    "createdAt": 1789875319746,
-    "updatedAt": 1789875698960
+    "targetMinutes": [
+      "2-1m"
+    ]
   },
   {
-    "id": "bot_1789907392915",
-    "name": "Bot Mới",
+    "id": "bot_1790001466478",
+    "name": "🪤 Bot Săn Bẫy Trader (Trap 90% -> Đảo $15 Phút Chót)",
     "enabled": false,
     "mode": "SIMULATOR",
     "strategy": "TRAP_TRADERS",
     "stakeMode": "FLAT",
-    "baseStake": 2,
+    "baseStake": 10,
     "multiplier": 1,
     "maxSteps": 1,
     "maxDailyLoss": 50,
-    "oddsMin": 0.85,
-    "oddsMax": 0.9,
+    "oddsMin": 0.05,
+    "oddsMax": 0.2,
     "targetOddsBuckets": [
+      "70-75",
+      "75-80",
+      "80-85",
       "85-90",
-      "80-85"
+      "90-95",
+      "95+"
     ],
     "sessions": [
       "all"
     ],
     "targetMinutes": [
-      "1-0m"
+      "2-1m"
     ],
-    "minTimeRemaining": 10,
-    "maxTimeRemaining": 60,
+    "minTimeRemaining": 20,
+    "maxTimeRemaining": 120,
     "minPriceBuffer": 15,
-    "maxSlippageBps": 600,
+    "maxSlippageBps": 450,
     "trapPeakOddsMin": 0.9,
     "trapMinPriceReversal": 15,
     "trapMaxOdds": 0.85,
-    "createdAt": 1789907588099,
-    "updatedAt": 1789907588099
+    "createdAt": 1790001500885,
+    "updatedAt": 1790001566097
   }
 ]

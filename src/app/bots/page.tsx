@@ -1,12 +1,14 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Play, ShieldAlert, Cpu, Activity, BarChart2, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Plus, Play, ShieldAlert, Cpu, Activity, BarChart2, RefreshCw, History } from 'lucide-react';
 import type { BotConfig, BotRuntimeState, BotTradeLog } from '@/lib/types';
 import BotCard from '@/components/BotCard';
 import BotConfigModal from '@/components/BotConfigModal';
+import BacktestExecuteModal from '@/components/BacktestExecuteModal';
+import BacktestHistoryModal from '@/components/BacktestHistoryModal';
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -22,10 +24,32 @@ interface BotsResponse {
 export default function BotsStudioPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingBot, setEditingBot] = useState<BotConfig | null>(null);
+  const [backtestExecuteBot, setBacktestExecuteBot] = useState<BotConfig | null>(null);
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
 
   const { data, error, isLoading, mutate } = useSWR<BotsResponse>('/api/bots', fetcher, {
     refreshInterval: 500, // Cập nhật live realtime mỗi 500ms
   });
+
+  const { data: historyData, mutate: mutateHistory } = useSWR('/api/bots/backtest/history', fetcher, {
+    refreshInterval: 3000,
+  });
+
+  const latestBacktestByBot = useMemo(() => {
+    const map: Record<string, { winRate: number; netPnl: number; executedAt: number }> = {};
+    if (historyData?.history && Array.isArray(historyData.history)) {
+      for (const run of historyData.history) {
+        if (!map[run.botId]) {
+          map[run.botId] = {
+            winRate: run.summary.winRate,
+            netPnl: run.summary.netPnl,
+            executedAt: run.executedAt,
+          };
+        }
+      }
+    }
+    return map;
+  }, [historyData]);
 
   const handleCreateNew = () => {
     setEditingBot(null);
@@ -162,7 +186,27 @@ export default function BotsStudioPage() {
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 12 }}>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={() => setHistoryModalOpen(true)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              background: 'rgba(59, 130, 246, 0.15)',
+              border: '1px solid rgba(59, 130, 246, 0.35)',
+              color: '#60a5fa',
+              padding: '10px 16px',
+              borderRadius: 8,
+              fontSize: '0.88rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            <History size={16} /> Lịch Sử Kiểm Thử {historyData?.total ? `(${historyData.total})` : ''}
+          </button>
+
           <Link
             href="/stats"
             style={{
@@ -479,8 +523,10 @@ export default function BotsStudioPage() {
                 key={item.config.id}
                 config={item.config}
                 state={item.state}
+                latestBacktestSummary={latestBacktestByBot[item.config.id]}
                 onUpdate={handleSaveBot}
                 onEdit={handleEdit}
+                onExecuteBacktest={(botToTest) => setBacktestExecuteBot(botToTest)}
                 onDelete={handleDeleteBot}
               />
             ))}
@@ -763,6 +809,8 @@ export default function BotsStudioPage() {
                           ❌ Không khớp (Trượt giá - 0$)
                         </span>
                       ) : (
+
+
                         <span style={{
                           color: log.status === 'WIN' ? '#4ade80' : log.status === 'LOSS' ? '#f87171' : '#facc15',
                           fontWeight: 700,
@@ -789,6 +837,21 @@ export default function BotsStudioPage() {
         initialConfig={editingBot}
         onClose={() => setModalOpen(false)}
         onSave={handleSaveBot}
+      />
+
+      {/* Modal Thực Thi Backtest Dữ Liệu Cũ */}
+      <BacktestExecuteModal
+        bot={backtestExecuteBot}
+        isOpen={Boolean(backtestExecuteBot)}
+        onClose={() => setBacktestExecuteBot(null)}
+        onViewHistory={() => setHistoryModalOpen(true)}
+        onRunComplete={() => mutateHistory()}
+      />
+
+      {/* Modal Lịch Sử Kiểm Thử (Backtest History) */}
+      <BacktestHistoryModal
+        isOpen={historyModalOpen}
+        onClose={() => setHistoryModalOpen(false)}
       />
     </main>
   );

@@ -189,6 +189,7 @@ class PredictionWebSocketService {
           // Bắn dữ liệu Realtime tới tất cả listeners (OddsCollector & BotEngine)
           for (const listener of this.listeners) {
             try {
+              console.log("ws realtime", update)
               listener(update);
             } catch (err) {
               console.error('[PREDICTION WSS] Lỗi trong callback listener:', err);
