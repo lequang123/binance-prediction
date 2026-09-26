@@ -2,6 +2,7 @@
 
 # logs (ML training data)
 /logs
+!/logs/binance_ai_predictions.jsonl
 
 # dependencies
 /node_modules
