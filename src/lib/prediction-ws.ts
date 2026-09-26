@@ -35,6 +35,7 @@ class PredictionWebSocketService {
   private isExplicitlyClosed = false;
   private listeners: Set<OrderbookListener> = new Set();
   private isConnected = false;
+  private hasAuthError = false;
 
   constructor() {
     // Singleton
@@ -59,6 +60,7 @@ class PredictionWebSocketService {
     console.log(`[PREDICTION WSS] 🎯 Chuyển luồng Orderbook sang Kỳ #${marketId}`);
     this.currentMarketId = marketId;
     this.lastTimestampMs = 0;
+    this.hasAuthError = false; // Reset auth error on new round
     this.connect();
   }
 
@@ -116,7 +118,9 @@ class PredictionWebSocketService {
       });
 
       this.ws.on('message', (buf: any) => {
-        this.handleMessage(buf.toString());
+        const raw = buf.toString();
+        console.log('[PREDICTION WSS 📩 DATA BẮN VỀ]:', raw);
+        this.handleMessage(raw);
       });
 
       this.ws.on('error', (err: Error) => {
@@ -125,7 +129,8 @@ class PredictionWebSocketService {
 
       this.ws.on('close', (code: number, reason: any) => {
         this.isConnected = false;
-        console.log(`[PREDICTION WSS] 🔌 Đóng kết nối (code: ${code}, reason: ${reason ? reason.toString() : 'none'})`);
+        const reasonStr = reason ? reason.toString() : 'none';
+        console.log(`[PREDICTION WSS] 🔌 Đóng kết nối (code: ${code}, reason: ${reasonStr})`);
         if (!this.isExplicitlyClosed) {
           this.scheduleReconnect();
         }
@@ -147,6 +152,13 @@ class PredictionWebSocketService {
       if (parsed.type === 'COMMAND') {
         if (parsed.data === 'SUCCESS') {
           console.log(`[PREDICTION WSS] 🚀 Đăng ký Topic thành công [${parsed.subType || 'REGISTER'}]`);
+          this.hasAuthError = false;
+        } else {
+          console.warn(`[PREDICTION WSS] ⚠️ Lỗi đăng ký từ Binance: ${parsed.data} [${parsed.subType || ''}]`);
+          if (typeof parsed.data === 'string' && parsed.data.includes('Invalid API-key')) {
+            this.hasAuthError = true;
+            console.error('[PREDICTION WSS] ❌ API-Key hoặc IP không có quyền truy cập SAPI WebSocket. Vui lòng kiểm tra quyền hoặc IP whitelist trong Binance API Management. Hệ thống vẫn tiếp tục thu thập qua HTTP polling 300ms bình thường.');
+          }
         }
         return;
       }
@@ -186,10 +198,11 @@ class PredictionWebSocketService {
             bids,
           };
 
+          console.log(`[PREDICTION WSS 📊 ORDERBOOK PUSH] Kỳ #${marketId}: MidPrice=${midPrice?.toFixed(4)} | BestAsk=${bestAsk} | BestBid=${bestBid} | Depth: ${asks.length} asks, ${bids.length} bids`);
+
           // Bắn dữ liệu Realtime tới tất cả listeners (OddsCollector & BotEngine)
           for (const listener of this.listeners) {
             try {
-              console.log("ws realtime", update)
               listener(update);
             } catch (err) {
               console.error('[PREDICTION WSS] Lỗi trong callback listener:', err);
@@ -204,12 +217,19 @@ class PredictionWebSocketService {
 
   private scheduleReconnect(): void {
     if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
+
+    // Nếu lỗi quyền API Key/IP, chờ 60s thay vì spam mỗi 2s
+    const delay = this.hasAuthError ? 60000 : 5000;
+    if (this.hasAuthError) {
+      console.warn(`[PREDICTION WSS] ⏸️ Tạm hoãn kết nối lại (${delay / 1000}s) do lỗi quyền API-Key/IP để tránh spam log.`);
+    }
+
     this.reconnectTimeout = setTimeout(() => {
       if (!this.isExplicitlyClosed && this.currentMarketId) {
-        console.log('[PREDICTION WSS] 🔄 Đang tự động kết nối lại WebSocket...');
+        console.log('[PREDICTION WSS] 🔄 Đang thử kết nối lại WebSocket...');
         this.connect();
       }
-    }, 2000);
+    }, delay);
   }
 
   private cleanup(): void {

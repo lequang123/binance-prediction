@@ -7,8 +7,8 @@ import path from 'path';
 import type { DetectedTrade, MarketSnapshot, CompactSnapshot } from './types';
 
 // Use /tmp/logs on Vercel (read-only filesystem workaround), otherwise local logs dir
-const LOGS_DIR = process.env.VERCEL 
-  ? path.join('/tmp', 'logs') 
+const LOGS_DIR = process.env.VERCEL
+  ? path.join('/tmp', 'logs')
   : path.join(process.cwd(), 'logs');
 
 /**
@@ -33,7 +33,7 @@ function getDateString(): string {
  */
 function appendJsonl(filename: string, data: unknown): void {
   return; // Đã tắt ghi file log theo yêu cầu
-  
+
   ensureLogsDir();
   const filepath = path.join(LOGS_DIR, filename);
   const line = JSON.stringify(data) + '\n';
@@ -60,19 +60,19 @@ export function logTrade(trade: DetectedTrade): void {
     potentialWin: round(trade.potentialWin),
     cumUp: trade.cumUp
       ? {
-          shares: round(trade.cumUp.shares),
-          value: round(trade.cumUp.value),
-          pnl: round(trade.cumUp.pnl),
-          costBasis: round(trade.cumUp.costBasis),
-        }
+        shares: round(trade.cumUp.shares),
+        value: round(trade.cumUp.value),
+        pnl: round(trade.cumUp.pnl),
+        costBasis: round(trade.cumUp.costBasis),
+      }
       : null,
     cumDown: trade.cumDown
       ? {
-          shares: round(trade.cumDown.shares),
-          value: round(trade.cumDown.value),
-          pnl: round(trade.cumDown.pnl),
-          costBasis: round(trade.cumDown.costBasis),
-        }
+        shares: round(trade.cumDown.shares),
+        value: round(trade.cumDown.value),
+        pnl: round(trade.cumDown.pnl),
+        costBasis: round(trade.cumDown.costBasis),
+      }
       : null,
     hedgeRatio: round(trade.hedgeRatio, 4),
     totalInvested: round(trade.totalInvested),
@@ -91,21 +91,21 @@ export function logSnapshot(snapshot: MarketSnapshot): void {
     mid: snapshot.marketId,
     up: snapshot.up
       ? {
-          s: round(snapshot.up.shares),
-          v: round(snapshot.up.value),
-          avg: round(snapshot.up.avgPrice, 6),
-          cur: snapshot.up.currentPrice,
-          pnl: round(snapshot.up.pnl),
-        }
+        s: round(snapshot.up.shares),
+        v: round(snapshot.up.value),
+        avg: round(snapshot.up.avgPrice, 6),
+        cur: snapshot.up.currentPrice,
+        pnl: round(snapshot.up.pnl),
+      }
       : null,
     dn: snapshot.down
       ? {
-          s: round(snapshot.down.shares),
-          v: round(snapshot.down.value),
-          avg: round(snapshot.down.avgPrice, 6),
-          cur: snapshot.down.currentPrice,
-          pnl: round(snapshot.down.pnl),
-        }
+        s: round(snapshot.down.shares),
+        v: round(snapshot.down.value),
+        avg: round(snapshot.down.avgPrice, 6),
+        cur: snapshot.down.currentPrice,
+        pnl: round(snapshot.down.pnl),
+      }
       : null,
     hr: round(snapshot.hedgeRatio, 4),
   };

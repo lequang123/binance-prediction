@@ -473,7 +473,68 @@ export interface BotTradeLog {
   fillPrice?: number;
   triggerOdds?: number;
   skipReason?: string;
+}// ============================================================
+// Binance AI Analysis & Prediction Stats Types
+// ============================================================
+
+export interface AiIndicatorItem {
+  name: string;
+  value: string | null;
+  signal: string | null;
+  impact: 'bullish' | 'bearish' | 'neutral' | string;
+  summary: string;
 }
 
+export interface AiPredictionRecord {
+  mtid: number;
+  ts: number;
+  direction: 'Up' | 'Down';
+  confidence: 'low' | 'medium' | 'high' | string;
+  summary: string;
+  reasoning: string;
+  aiProbUp: number;
+  aiProbDown: number;
+  marketProbUp: number;
+  marketProbDown: number;
+  startPrice?: number;
+  targetPrice?: string;
+  indicators?: AiIndicatorItem[];
+  // Outcome & resolution fields
+  winner?: 'Up' | 'Down';
+  isWin?: boolean;
+  endPrice?: number;
+  resolvedAt?: number;
+  oddsAtSignal?: number;
+  simulatedPnl?: number; // based on $1 bet
+}
 
+export interface BinanceAiStats {
+  totalEvaluated: number;
+  resolvedCount: number;
+  wins: number;
+  losses: number;
+  winRate: number; // 0 - 1
+  currentStreak: { type: 'WIN' | 'LOSS' | 'NONE'; count: number };
+  maxWinStreak: number;
+  maxLossStreak: number;
+  simulatedNetPnl: number;
+  simulatedRoiPct: number;
+  confidenceStats: {
+    low: { total: number; wins: number; winRate: number; pnl: number };
+    medium: { total: number; wins: number; winRate: number; pnl: number };
+    high: { total: number; wins: number; winRate: number; pnl: number };
+  };
+  directionStats: {
+    up: { total: number; wins: number; winRate: number };
+    down: { total: number; wins: number; winRate: number };
+  };
+  contrarianStats: {
+    total: number;
+    wins: number;
+    winRate: number;
+    pnl: number;
+  };
+  latestPrediction: AiPredictionRecord | null;
+  recentPredictions: AiPredictionRecord[];
+}
 

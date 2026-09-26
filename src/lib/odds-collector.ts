@@ -8,6 +8,7 @@ import type { OddsSnapshot, RoundResult, RoundOddsBucketEntry } from './types';
 import { tickMultiBots, resolveMultiBots } from './bot-engine';
 import { getPredictionQuote, WALLET_ADDRESS } from './trade-api';
 import { predictionWs } from './prediction-ws';
+import { fetchAiAnalysisForMarket, resolveAiPrediction } from './binance-ai-service';
 
 let latestEventDetail: any = null;
 
@@ -303,7 +304,14 @@ async function pollOnce(): Promise<void> {
       // 3. Chuyển topic WebSocket Orderbook sang kỳ mới
       predictionWs.setMarketId(detail.marketTopicId);
 
-      // // 4. 🎁 Tự động Redeem All các vị thế thắng khi sang Kỳ mới
+      // 4. Thu thập dự đoán Binance AI cho kỳ mới
+      fetchAiAnalysisForMarket(detail.marketTopicId, {
+        upPrice: detail.upPrice,
+        downPrice: detail.downPrice,
+        startPrice: detail.startPrice,
+      }).catch((e) => console.error('[AI COLLECTOR ERROR]:', e));
+
+      // // 5. 🎁 Tự động Redeem All các vị thế thắng khi sang Kỳ mới
       // import('./trade-api').then(({ redeemAllWinningPositions }) => {
       //   redeemAllWinningPositions().catch((err) =>
       //     console.error('[AUTO REDEEM ERROR]:', err?.message || err)
@@ -314,6 +322,11 @@ async function pollOnce(): Promise<void> {
     if (state.currentMarketTopicId === null) {
       state.roundCount++;
       predictionWs.setMarketId(detail.marketTopicId);
+      fetchAiAnalysisForMarket(detail.marketTopicId, {
+        upPrice: detail.upPrice,
+        downPrice: detail.downPrice,
+        startPrice: detail.startPrice,
+      }).catch((e) => console.error('[AI COLLECTOR ERROR]:', e));
     }
     state.currentMarketTopicId = detail.marketTopicId;
 
@@ -402,6 +415,9 @@ async function resolveRound(marketTopicId: number): Promise<void> {
 
       // 🤖 BÁO KẾT QUẢ CHO MULTI-BOTS (Để cập nhật Win/Loss, Cooldown, Reset/Gấp thếp)
       resolveMultiBots(result);
+
+      // 🧠 ĐỐI SOÁT DỰ ĐOÁN BINANCE AI (Cập nhật Win/Loss, PnL, Streak)
+      resolveAiPrediction(result.mtid, result.winner, result.endPrice);
 
       return;
     }

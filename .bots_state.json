@@ -18,15 +18,15 @@
     "currentStake": 1,
     "currentStep": 1,
     "cooldownRemaining": 0,
-    "dailyLoss": 17,
-    "dailyPnl": -7.7699999999999925,
-    "totalTrades": 131,
-    "winCount": 102,
-    "lossCount": 24,
-    "lastTradeTimestamp": 1789995481650,
+    "dailyLoss": 25,
+    "dailyPnl": -15.620000000000001,
+    "totalTrades": 149,
+    "winCount": 114,
+    "lossCount": 30,
+    "lastTradeTimestamp": 1790425079056,
     "lastActiveMarketId": null,
     "status": "IDLE",
-    "lastDayUTC": 21
+    "lastDayUTC": 26
   },
   "bot_ladder_1_6_15_40": {
     "botId": "bot_ladder_1_6_15_40",
@@ -55,7 +55,7 @@
     "lastTradeTimestamp": 0,
     "lastActiveMarketId": null,
     "status": "IDLE",
-    "lastDayUTC": 21
+    "lastDayUTC": 26
   },
   "bot_1790001466478": {
     "botId": "bot_1790001466478",

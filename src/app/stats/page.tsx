@@ -7,6 +7,7 @@ import type {
   TradingSession,
 } from '@/lib/types';
 import AiAdvisorPanel from './AiAdvisorPanel';
+import BinanceAiTracker from '@/components/BinanceAiTracker';
 import styles from './stats.module.css';
 
 interface CollectorStatus {
@@ -233,7 +234,7 @@ export default function StatsPage() {
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState(false);
   const [selectedSession, setSelectedSession] = useState<TradingSession>('all');
-  const [activeTab, setActiveTab] = useState<'winrate' | 'reversal' | 'ev' | 'streak' | 'losses' | 'ai'>('winrate');
+  const [activeTab, setActiveTab] = useState<'winrate' | 'reversal' | 'ev' | 'streak' | 'losses' | 'ai' | 'binance_ai'>('winrate');
   const [simStake, setSimStake] = useState<number>(10);
   const [simViewMode, setSimViewMode] = useState<'total' | 'per_trade'>('total');
   const [simSide, setSimSide] = useState<'both' | 'favorite' | 'underdog'>('both');
@@ -583,15 +584,27 @@ export default function StatsPage() {
           🔍 Chi tiết ca thua & Giá lệch
         </button>
         <button
+          className={`${styles.tab} ${activeTab === 'binance_ai' ? styles.tabActive : ''}`}
+          onClick={() => setActiveTab('binance_ai')}
+          style={{
+            borderColor: activeTab === 'binance_ai' ? '#3b82f6' : undefined,
+            color: activeTab === 'binance_ai' ? '#60a5fa' : undefined,
+          }}
+        >
+          ⚡ Tín hiệu & Win Rate AI (Binance)
+        </button>
+        <button
           className={`${styles.tab} ${activeTab === 'ai' ? styles.tabActive : ''}`}
           onClick={() => setActiveTab('ai')}
         >
-          🤖 AI Chiến Lược (Gemini)
+          🤖 AI Cố Vấn (Gemini)
         </button>
       </div>
 
       {/* Main Content Area */}
-      {activeTab === 'ai' ? (
+      {activeTab === 'binance_ai' ? (
+        <BinanceAiTracker currentMarketTopicId={data?.collector.currentMarketTopicId} />
+      ) : activeTab === 'ai' ? (
         <AiAdvisorPanel
           selectedSession={selectedSession}
           resolvedRounds={data?.stats.resolvedRounds ?? 0}
