@@ -17,6 +17,11 @@ import type {
   RealisticBacktestOptions,
 } from './types';
 import { getTradingSession } from './odds-stats';
+import {
+  run5mPredictionEngine,
+  sharedCandleCache,
+  type CandleOHLCV,
+} from './standalone5mEngine';
 
 const CONFIG_FILE = path.join(process.cwd(), '.bots_config.json');
 const STATE_FILE = path.join(process.cwd(), '.bots_state.json');
@@ -791,6 +796,8 @@ export interface EvaluatedSignal {
   stake?: number;
   step?: number;
   reason: string;
+  engineConfidence?: number;
+  engineSignal?: string;
 }
 
 /**
@@ -1044,13 +1051,76 @@ export function evaluateBotSignal(
   // ═══════════════════════════════════════════════════════════════════
   // TÁCH BIỆT HOÀN TOÀN GIỮA 2 LOẠI BOT - KHÔNG DÙNG CHUNG ĐIỀU KIỆN
   // ═══════════════════════════════════════════════════════════════════
+  let signal: EvaluatedSignal;
   if (config.strategy === 'TRAP_TRADERS') {
     // 🪤 ĐIỀU KIỆN ĐẶC QUYỀN CỦA BOT SĂN BẪY TRADER:
-    return evaluateTrapTradersSignal(config, state, snapshot, eventDetail);
+    signal = evaluateTrapTradersSignal(config, state, snapshot, eventDetail);
   } else {
     // 🛡️ ĐIỀU KIỆN TIÊU CHUẨN CỦA BOT THÔNG THƯỜNG:
-    return evaluateStandardBotSignal(config, state, snapshot, eventDetail);
+    signal = evaluateStandardBotSignal(config, state, snapshot, eventDetail);
   }
+
+  if (!signal.shouldTrade || !signal.side) {
+    return signal;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 🛡️ CONFIDENCE GATE: BỘ LỌC TỰ TIN TỪ 5M PREDICTION ENGINE
+  // ═══════════════════════════════════════════════════════════════════
+  if (config.useEngineFilter) {
+    const activeCandles = sharedCandleCache.getCandlesSync();
+    const currentPrice = eventDetail.currentPrice || eventDetail.startPrice || 0;
+    const startPrice = eventDetail.startPrice || 0;
+
+    if (activeCandles && activeCandles.length >= 10 && currentPrice > 0 && startPrice > 0) {
+      const minConfidence = config.minEngineConfidence ?? 60;
+      const engineRes = run5mPredictionEngine(
+        currentPrice,
+        startPrice,
+        snapshot.tr,
+        activeCandles
+      );
+
+      signal.engineConfidence = engineRes.confidence;
+      signal.engineSignal = engineRes.signal;
+
+      // 1. Kiểm tra hướng đồng thuận (Engine UP/DOWN phải trùng với Bot Side)
+      const botSideUpper = signal.side.toUpperCase(); // 'UP' | 'DOWN'
+      if (engineRes.signal !== botSideUpper) {
+        return {
+          shouldTrade: false,
+          reason: `[ENGINE GATE] ❌ Engine báo ${engineRes.signal} (${engineRes.confidence}%) không đồng thuận với hướng bot ${signal.side}. (${engineRes.reason})`,
+          engineConfidence: engineRes.confidence,
+          engineSignal: engineRes.signal,
+        };
+      }
+
+      // 2. Kiểm tra độ tự tin tối thiểu
+      if (engineRes.confidence < minConfidence) {
+        return {
+          shouldTrade: false,
+          reason: `[ENGINE GATE] ⚠️ Độ tự tin Engine (${engineRes.confidence}%) chưa đạt ngưỡng tối thiểu (${minConfidence}%). (${engineRes.reason})`,
+          engineConfidence: engineRes.confidence,
+          engineSignal: engineRes.signal,
+        };
+      }
+
+      // 3. Kiểm tra nến có đang suy yếu (nếu cấu hình rejectIfWeakening)
+      if (config.rejectIfWeakening && engineRes.trajectory.status === 'WEAKENING') {
+        return {
+          shouldTrade: false,
+          reason: `[ENGINE GATE] ⚠️ Lực nến đang suy yếu (${engineRes.trajectory.displayText}). (${engineRes.reason})`,
+          engineConfidence: engineRes.confidence,
+          engineSignal: engineRes.signal,
+        };
+      }
+
+      // Tự tin đạt yêu cầu!
+      signal.reason = `${signal.reason} | 🎯 [Engine duyệt: ${engineRes.confidence}% ${engineRes.signal}]`;
+    }
+  }
+
+  return signal;
 }
 
 // ── Background Runner Orchestrators (Hooked into 1s loop) ──
@@ -1125,6 +1195,13 @@ export async function tickMultiBots(
       modified = true;
     }
 
+    // Tự động đồng bộ tiền cược về baseStake khi bot đang rảnh (IDLE) ở chế độ FLAT
+    if (config.stakeMode === 'FLAT' && state.status === 'IDLE' && (state.currentStake !== config.baseStake || state.currentStep !== 1)) {
+      state.currentStake = config.baseStake;
+      state.currentStep = 1;
+      modified = true;
+    }
+
     const signal = evaluateBotSignal(config, state, snapshot, eventDetail);
 
     if (signal.shouldTrade && signal.side && signal.odds && signal.stake) {
@@ -1153,6 +1230,8 @@ export async function tickMultiBots(
         mode: config.mode,
         status: 'PENDING',
         pnl: 0,
+        engineConfidence: signal.engineConfidence,
+        engineSignal: signal.engineSignal,
       };
 
       if (config.mode === 'REAL_TRADE' && tokenId) {

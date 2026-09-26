@@ -1,145 +1,46 @@
 [
   {
-    "id": "bot_trap_traders",
-    "name": "🪤 Bot Săn Bẫy Trader (Trap 90% -> Đảo $15 Phút Chót)",
-    "enabled": true,
-    "mode": "REAL_TRADE",
-    "strategy": "TRAP_TRADERS",
-    "stakeMode": "FLAT",
-    "baseStake": 2,
-    "multiplier": 1,
-    "maxSteps": 1,
-    "maxDailyLoss": 50,
-    "oddsMin": 0.5,
-    "oddsMax": 0.85,
-    "trapPeakOddsMin": 0.9,
-    "trapMinPriceReversal": 15,
-    "trapMaxOdds": 0.85,
-    "sessions": [
-      "all"
-    ],
-    "targetMinutes": [
-      "1-0m"
-    ],
-    "minTimeRemaining": 35,
-    "maxTimeRemaining": 60,
-    "minPriceBuffer": 15,
-    "maxSlippageBps": 600,
-    "createdAt": 1789901000000,
-    "updatedAt": 1790002157634,
-    "targetOddsBuckets": [
-      "85-90",
-      "90-95",
-      "80-85",
-      "75-80"
-    ]
-  },
-  {
     "id": "bot_flat_2_1m",
-    "name": "🛡️ Bot 1, 6, 15, 40",
+    "name": "Bot mới",
     "enabled": true,
-    "mode": "SIMULATOR",
-    "strategy": "MARTINGALE_FAVORITE",
-    "stakeMode": "CUSTOM_LADDER",
-    "baseStake": 1,
-    "multiplier": 1,
-    "maxSteps": 3,
-    "maxDailyLoss": 65,
-    "oddsMin": 0.85,
-    "oddsMax": 0.9,
-    "sessions": [
-      "all"
-    ],
-    "minTimeRemaining": 60,
-    "maxTimeRemaining": 120,
-    "minPriceBuffer": 15,
-    "maxSlippageBps": 500,
-    "createdAt": 1789875319746,
-    "updatedAt": 1790003140560,
-    "targetOddsBuckets": [
-      "75-80",
-      "80-85",
-      "70-75"
-    ],
-    "targetMinutes": [
-      "2-1m"
-    ],
-    "customLadder": [
-      1,
-      6,
-      15
-    ]
-  },
-  {
-    "id": "bot_ladder_1_6_15_40",
-    "name": "👑 Bot Thần Tốc 1$ - 6$ - 15$ - 40$",
-    "enabled": false,
     "mode": "SIMULATOR",
     "strategy": "MARTINGALE_FAVORITE",
     "stakeMode": "CUSTOM_LADDER",
     "baseStake": 1,
     "multiplier": 1,
     "maxSteps": 4,
+    "maxDailyLoss": 65,
+    "oddsMin": 0.85,
+    "oddsMax": 0.9,
+    "targetOddsBuckets": [
+      "75-80",
+      "80-85",
+      "70-75",
+      "85-90"
+    ],
+    "sessions": [
+      "all"
+    ],
+    "targetMinutes": [
+      "2-1m"
+    ],
+    "minTimeRemaining": 30,
+    "maxTimeRemaining": 120,
+    "minPriceBuffer": 15,
+    "maxSlippageBps": 500,
+    "trapPeakOddsMin": 0.9,
+    "trapMinPriceReversal": 15,
+    "trapMaxOdds": 0.85,
+    "useEngineFilter": true,
+    "minEngineConfidence": 65,
+    "rejectIfWeakening": true,
+    "createdAt": 1789875319746,
+    "updatedAt": 1790428165336,
     "customLadder": [
       1,
       6,
       15,
       40
-    ],
-    "maxDailyLoss": 65,
-    "oddsMin": 0.85,
-    "oddsMax": 0.9,
-    "sessions": [
-      "all"
-    ],
-    "minTimeRemaining": 20,
-    "maxTimeRemaining": 120,
-    "minPriceBuffer": 20,
-    "createdAt": 1789875319746,
-    "updatedAt": 1790001312807,
-    "targetOddsBuckets": [
-      "85-90",
-      "80-85"
-    ],
-    "targetMinutes": [
-      "2-1m"
     ]
-  },
-  {
-    "id": "bot_1790001466478",
-    "name": "🪤 Bot Săn Bẫy Trader (Trap 90% -> Đảo $15 Phút Chót)",
-    "enabled": false,
-    "mode": "SIMULATOR",
-    "strategy": "TRAP_TRADERS",
-    "stakeMode": "FLAT",
-    "baseStake": 10,
-    "multiplier": 1,
-    "maxSteps": 1,
-    "maxDailyLoss": 50,
-    "oddsMin": 0.05,
-    "oddsMax": 0.2,
-    "targetOddsBuckets": [
-      "70-75",
-      "75-80",
-      "80-85",
-      "85-90",
-      "90-95",
-      "95+"
-    ],
-    "sessions": [
-      "all"
-    ],
-    "targetMinutes": [
-      "2-1m"
-    ],
-    "minTimeRemaining": 20,
-    "maxTimeRemaining": 120,
-    "minPriceBuffer": 15,
-    "maxSlippageBps": 450,
-    "trapPeakOddsMin": 0.9,
-    "trapMinPriceReversal": 15,
-    "trapMaxOdds": 0.85,
-    "createdAt": 1790001500885,
-    "updatedAt": 1790001566097
   }
 ]

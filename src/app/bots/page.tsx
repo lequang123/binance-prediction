@@ -723,6 +723,7 @@ export default function BotsStudioPage() {
                   <th style={{ padding: '8px 12px' }}>Mã Kỳ</th>
                   <th style={{ padding: '8px 12px' }}>Cửa Cược</th>
                   <th style={{ padding: '8px 12px' }}>Odds / Khớp Thực Tế</th>
+                  <th style={{ padding: '8px 12px' }}>Độ Tự Tin</th>
                   <th style={{ padding: '8px 12px' }}>Tiền Cược</th>
                   <th style={{ padding: '8px 12px' }}>Chế Độ</th>
                   {activeMode === 'REAL_TRADE' && <th style={{ padding: '8px 12px' }}>OrderID Binance</th>}
@@ -773,6 +774,41 @@ export default function BotsStudioPage() {
                         </div>
                       ) : (
                         <span style={{ color: '#64748b' }}>—</span>
+                      )}
+                    </td>
+                    <td style={{ padding: '10px 12px' }}>
+                      {log.engineConfidence ? (
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          padding: '2px 8px',
+                          borderRadius: 4,
+                          fontSize: '0.75rem',
+                          fontWeight: 700,
+                          background: log.engineConfidence >= 70
+                            ? 'rgba(34, 197, 94, 0.15)'
+                            : log.engineConfidence >= 60
+                            ? 'rgba(99, 102, 241, 0.15)'
+                            : 'rgba(234, 179, 8, 0.15)',
+                          color: log.engineConfidence >= 70
+                            ? '#4ade80'
+                            : log.engineConfidence >= 60
+                            ? '#818cf8'
+                            : '#facc15',
+                          border: `1px solid ${
+                            log.engineConfidence >= 70
+                              ? 'rgba(34, 197, 94, 0.3)'
+                              : log.engineConfidence >= 60
+                              ? 'rgba(99, 102, 241, 0.3)'
+                              : 'rgba(234, 179, 8, 0.3)'
+                          }`,
+                          whiteSpace: 'nowrap',
+                        }}>
+                          🎯 {log.engineConfidence}% {log.engineSignal || ''}
+                        </span>
+                      ) : (
+                        <span style={{ color: '#64748b', fontSize: '0.75rem' }}>—</span>
                       )}
                     </td>
                     <td style={{ padding: '10px 12px', fontWeight: 700 }}>

@@ -250,6 +250,12 @@ export default function BotCard({
               <span>🛡️ Đệm ${config.minPriceBuffer}</span>
               <span>•</span>
               <span>🛑 Max Loss ${config.maxDailyLoss}/ngày</span>
+              {config.useEngineFilter && (
+                <>
+                  <span>•</span>
+                  <span style={{ color: '#818cf8', fontWeight: 600 }}>🎯 Engine ≥{config.minEngineConfidence || 65}%</span>
+                </>
+              )}
             </>
           )}
         </div>

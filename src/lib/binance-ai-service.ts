@@ -253,8 +253,7 @@ export function resolveAiPrediction(
   flushRecordsToDisk();
 
   console.log(
-    `[BINANCE AI] 🎯 Đối soát Kỳ #${marketTopicId}: AI chọn ${record.direction} vs Thực tế ${winner} -> ${
-      record.isWin ? '✅ THẮNG (+$' + record.simulatedPnl.toFixed(2) + ')' : '❌ THUA (-$1.00)'
+    `[BINANCE AI] 🎯 Đối soát Kỳ #${marketTopicId}: AI chọn ${record.direction} vs Thực tế ${winner} -> ${record.isWin ? '✅ THẮNG (+$' + record.simulatedPnl.toFixed(2) + ')' : '❌ THUA (-$1.00)'
     }`
   );
 }

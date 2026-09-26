@@ -9,6 +9,7 @@ import { tickMultiBots, resolveMultiBots } from './bot-engine';
 import { getPredictionQuote, WALLET_ADDRESS } from './trade-api';
 import { predictionWs } from './prediction-ws';
 import { fetchAiAnalysisForMarket, resolveAiPrediction } from './binance-ai-service';
+import { sharedCandleCache } from './standalone5mEngine';
 
 let latestEventDetail: any = null;
 
@@ -347,6 +348,11 @@ async function pollOnce(): Promise<void> {
     const logDir = ensureLogDir();
     if (state.snapshotCount % 3 === 0) {
       appendToFile(path.join(logDir, 'odds_snapshots.jsonl'), snapshot);
+    }
+
+    // Làm ấm trước bộ nhớ đệm nến 1m cho 5M Prediction Engine mỗi ~9 giây
+    if (state.snapshotCount % 30 === 1) {
+      sharedCandleCache.getCandles('BTCUSDT').catch(() => {});
     }
 
     // 🤖 ĐIỀU PHỐI MULTI-BOT RUNNER (Gọi trực tiếp, không dynamic import mỗi 300ms)

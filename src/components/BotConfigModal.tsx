@@ -47,6 +47,9 @@ const DEFAULT_CONFIG: BotConfig = {
   trapPeakOddsMin: 0.90,
   trapMinPriceReversal: 15,
   trapMaxOdds: 0.85,
+  useEngineFilter: true,
+  minEngineConfidence: 65,
+  rejectIfWeakening: true,
   createdAt: Date.now(),
   updatedAt: Date.now(),
 };
@@ -70,7 +73,15 @@ export default function BotConfigModal({
 
   useEffect(() => {
     if (isOpen) {
-      const cfg = initialConfig ? { ...initialConfig } : { ...DEFAULT_CONFIG, id: `bot_${Date.now()}` };
+      const cfg = initialConfig
+        ? {
+            ...DEFAULT_CONFIG,
+            ...initialConfig,
+            useEngineFilter: initialConfig.useEngineFilter ?? true,
+            minEngineConfidence: initialConfig.minEngineConfidence ?? 65,
+            rejectIfWeakening: initialConfig.rejectIfWeakening ?? true,
+          }
+        : { ...DEFAULT_CONFIG, id: `bot_${Date.now()}` };
 
       // Khởi tạo mốc odds nếu chưa có
       if (!cfg.targetOddsBuckets || cfg.targetOddsBuckets.length === 0) {
@@ -1453,6 +1464,86 @@ export default function BotConfigModal({
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* PHẦN 5: BỘ LỌC TỰ TIN (5M ENGINE CONFIDENCE GATE) */}
+          <div style={{
+            background: config.useEngineFilter ? 'rgba(99, 102, 241, 0.08)' : 'rgba(255, 255, 255, 0.03)',
+            border: config.useEngineFilter ? '1px solid rgba(99, 102, 241, 0.35)' : '1px solid rgba(255, 255, 255, 0.08)',
+            borderRadius: 12,
+            padding: '16px',
+            marginBottom: 16,
+            transition: 'all 0.2s ease',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input
+                  type="checkbox"
+                  id="useEngineFilter"
+                  checked={config.useEngineFilter ?? true}
+                  onChange={(e) => handleChange('useEngineFilter', e.target.checked)}
+                  style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#6366f1' }}
+                />
+                <label htmlFor="useEngineFilter" style={{ fontSize: '0.85rem', fontWeight: 700, color: '#818cf8', textTransform: 'uppercase', letterSpacing: '0.5px', cursor: 'pointer' }}>
+                  🎯 5. BỘ LỌC TỰ TIN (5M PREDICTION ENGINE GATE):
+                </label>
+              </div>
+              <span style={{ fontSize: '0.75rem', color: (config.useEngineFilter ?? true) ? '#a5b4fc' : '#64748b', fontWeight: 600 }}>
+                {(config.useEngineFilter ?? true) ? `Đang bật (≥${config.minEngineConfidence ?? 65}% tự tin)` : 'Đang tắt'}
+              </span>
+            </div>
+
+            {(config.useEngineFilter ?? true) && (
+              <div>
+                <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: 8 }}>
+                  Ngưỡng điểm tự tin tối thiểu (Confidence Score 15-99% từ EMA, RSI, MACD, GBM Diffusion & Endgame Pin):
+                </div>
+                <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+                  {[
+                    { label: '55% (Cơ bản)', val: 55 },
+                    { label: '60% (Trung bình)', val: 60 },
+                    { label: '🎯 65% (Khuyên dùng)', val: 65 },
+                    { label: '🛡️ 70% (Chặt chẽ)', val: 70 },
+                    { label: '👑 75% (Siêu an toàn)', val: 75 },
+                  ].map((b) => (
+                    <button
+                      key={b.val}
+                      type="button"
+                      onClick={() => handleChange('minEngineConfidence', b.val)}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: 6,
+                        border: (config.minEngineConfidence ?? 65) === b.val ? '1px solid #818cf8' : '1px solid #334155',
+                        background: (config.minEngineConfidence ?? 65) === b.val ? 'rgba(99, 102, 241, 0.25)' : '#1e293b',
+                        color: (config.minEngineConfidence ?? 65) === b.val ? '#c7d2fe' : '#94a3b8',
+                        fontSize: '0.75rem',
+                        cursor: 'pointer',
+                        fontWeight: (config.minEngineConfidence ?? 65) === b.val ? 700 : 400,
+                      }}
+                    >
+                      {b.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, padding: '8px 10px', background: '#0f172a', borderRadius: 8 }}>
+                  <input
+                    type="checkbox"
+                    id="rejectIfWeakening"
+                    checked={config.rejectIfWeakening ?? true}
+                    onChange={(e) => handleChange('rejectIfWeakening', e.target.checked)}
+                    style={{ width: 14, height: 14, cursor: 'pointer', accentColor: '#f43f5e' }}
+                  />
+                  <label htmlFor="rejectIfWeakening" style={{ fontSize: '0.75rem', color: '#cbd5e1', cursor: 'pointer' }}>
+                    <strong>Từ chối lệnh nếu lực nến đang suy yếu</strong> (Trajectory WEAKENING - tránh bị đu đỉnh khi nến kiệt sức)
+                  </label>
+                </div>
+
+                <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 8 }}>
+                  💡 <em>Khi bật, bot chỉ vào lệnh nếu Engine phân tích nến Spot Binance xác nhận <strong>CÙNG CHIỀU</strong> và độ tự tin $\ge$ <strong>{config.minEngineConfidence ?? 65}%</strong>. Tự động bỏ qua các nến Doji áp sát Strike ở 30s cuối (Endgame Pin).</em>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Phiên hoạt động */}

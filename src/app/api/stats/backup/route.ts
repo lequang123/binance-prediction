@@ -53,7 +53,7 @@ function parseBackupPayload(textOrObj: unknown): {
           snapshots: obj.snapshots || [],
         };
       }
-    } catch {}
+    } catch { }
   }
 
   // Parse as JSON lines (.jsonl) or loose array
@@ -72,7 +72,7 @@ function parseBackupPayload(textOrObj: unknown): {
       } else if (item.up !== undefined && item.dn !== undefined) {
         snapshots.push(item);
       }
-    } catch {}
+    } catch { }
   }
 
   return { results, bucketEntries, snapshots };

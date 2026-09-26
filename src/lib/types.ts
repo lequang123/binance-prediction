@@ -346,6 +346,11 @@ export interface BotConfig {
   minPriceBuffer: number;          // Đệm giá an toàn tối thiểu (mặc định: $20)
   maxSlippageBps?: number;         // Mức trượt giá tối đa (ví dụ: 450 = 4.5%, 500 = 5.0%)
 
+  // Bộ lọc xác nhận từ 5M Prediction Engine (Confidence Gate)
+  useEngineFilter?: boolean;       // Bật bộ lọc tự tin từ 5M Prediction Engine
+  minEngineConfidence?: number;    // Ngưỡng tự tin tối thiểu (mặc định: 60%, khuyến nghị: 65%)
+  rejectIfWeakening?: boolean;     // Từ chối vào lệnh nếu gia tốc nến đang suy yếu
+
   createdAt: number;
   updatedAt: number;
 }
@@ -473,6 +478,8 @@ export interface BotTradeLog {
   fillPrice?: number;
   triggerOdds?: number;
   skipReason?: string;
+  engineConfidence?: number;
+  engineSignal?: string;
 }// ============================================================
 // Binance AI Analysis & Prediction Stats Types
 // ============================================================
